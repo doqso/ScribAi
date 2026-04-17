@@ -96,7 +96,8 @@ public static class ExtractionsEndpoints
         try { await JsonSchema.FromJsonAsync(schemaJson, ct); }
         catch (Exception ex) { return Results.BadRequest(new { error = "invalid_json_schema", detail = ex.Message }); }
 
-        var model = string.IsNullOrWhiteSpace(req.Model) ? original.Model : req.Model;
+        // Only admins may override the model; non-admins always inherit tenant default (resolved in ExtractionService)
+        var model = t.IsAdmin && !string.IsNullOrWhiteSpace(req.Model) ? req.Model : string.Empty;
 
         var rerun = new Extraction
         {
@@ -170,8 +171,8 @@ public static class ExtractionsEndpoints
 
         var forceAsync = form["async"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase);
         var webhookUrl = form["webhookUrl"].ToString();
-        var model = form["model"].ToString();
-        if (string.IsNullOrWhiteSpace(model)) model = t.DefaultModel;
+        // Only admins may override the model via the `model` form field; non-admins inherit tenant default
+        var model = t.IsAdmin ? form["model"].ToString() : string.Empty;
 
         var shouldAsync = forceAsync || file.Length > proc.SyncMaxBytes;
 

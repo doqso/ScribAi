@@ -42,10 +42,6 @@ import { MonacoComponent } from '../../core/monaco-editor.component';
                 }
               </select>
             </label>
-            <label>
-              Modelo (opcional, override)
-              <input [(ngModel)]="rerunModel" name="rm" [placeholder]="e.model" />
-            </label>
           </div>
           <div class="actions">
             <button (click)="rerun(e.id)" [disabled]="rerunning()">{{ rerunning() ? 'Procesando...' : 'Ejecutar re-extracción' }}</button>
@@ -125,7 +121,6 @@ export class ExtractionDetailComponent implements OnInit, OnDestroy {
   schemas = signal<SchemaDto[]>([]);
   showRerun = signal(false);
   rerunSchemaId = signal('');
-  rerunModel = signal('');
   rerunning = signal(false);
   rerunMsg = signal<string | null>(null);
 
@@ -187,8 +182,7 @@ export class ExtractionDetailComponent implements OnInit, OnDestroy {
     this.rerunning.set(true);
     this.rerunMsg.set(null);
     this.api.rerunExtraction(id, {
-      schemaId: this.rerunSchemaId() || undefined,
-      model: this.rerunModel() || undefined
+      schemaId: this.rerunSchemaId() || undefined
     }).subscribe({
       next: r => {
         this.rerunning.set(false);

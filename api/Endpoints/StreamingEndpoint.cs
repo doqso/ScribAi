@@ -88,8 +88,7 @@ public static class StreamingEndpoint
         try { await JsonSchema.FromJsonAsync(schemaJson, ct); }
         catch (Exception ex) { await WriteEvent("error", new { error = "invalid_json_schema", detail = ex.Message }); return; }
 
-        var model = form["model"].ToString();
-        if (string.IsNullOrWhiteSpace(model)) model = t.DefaultModel;
+        var model = t.IsAdmin ? form["model"].ToString() : string.Empty;
         var webhookUrl = form["webhookUrl"].ToString();
 
         var extraction = new Extraction
