@@ -19,6 +19,7 @@ public static class ExportEndpoints
             var e = await db.Extractions.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
             if (e is null) return Results.NotFound();
+            if (!t.IsAdmin && e.ApiKeyId != t.ApiKeyId) return Results.NotFound();
             if (string.IsNullOrEmpty(e.StorageKey)) return Results.NotFound(new { error = "not_stored" });
 
             var stream = await blobs.GetAsync(e.StorageKey, ct);
@@ -31,6 +32,7 @@ public static class ExportEndpoints
             var e = await db.Extractions.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
             if (e is null) return Results.NotFound();
+            if (!t.IsAdmin && e.ApiKeyId != t.ApiKeyId) return Results.NotFound();
             if (string.IsNullOrEmpty(e.Result)) return Results.BadRequest(new { error = "no_result" });
 
             var bytes = Encoding.UTF8.GetBytes(Pretty(e.Result));
@@ -52,6 +54,7 @@ public static class ExportEndpoints
                 .Where(x => x.TenantId == t.TenantId
                             && x.Status == ExtractionStatus.Succeeded
                             && x.Result != null);
+            if (!t.IsAdmin) q = q.Where(x => x.ApiKeyId == t.ApiKeyId);
 
             if (schemaId is Guid sid) q = q.Where(x => x.SchemaId == sid);
             if (!string.IsNullOrWhiteSpace(schemaName))

@@ -35,6 +35,7 @@ export const routes: Routes = [
       },
       {
         path: 'keys',
+        canActivate: [adminGuard],
         loadComponent: () => import('./features/keys/keys-list.component').then(m => m.KeysListComponent)
       },
       {

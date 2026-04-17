@@ -30,6 +30,7 @@ public static class ExtractionsEndpoints
             pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
 
             var query = db.Extractions.AsNoTracking().Where(e => e.TenantId == t.TenantId);
+            if (!t.IsAdmin) query = query.Where(e => e.ApiKeyId == t.ApiKeyId);
             if (!string.IsNullOrEmpty(status) && Enum.TryParse<ExtractionStatus>(status, true, out var st))
                 query = query.Where(e => e.Status == st);
 
@@ -48,7 +49,9 @@ public static class ExtractionsEndpoints
             var t = ctx.Tenant();
             var e = await db.Extractions.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
-            return e is null ? Results.NotFound() : Results.Ok(ToDto(e));
+            if (e is null) return Results.NotFound();
+            if (!t.IsAdmin && e.ApiKeyId != t.ApiKeyId) return Results.NotFound();
+            return Results.Ok(ToDto(e));
         });
 
         g.MapPost("/{id:guid}/rerun", HandleRerun);
@@ -71,6 +74,7 @@ public static class ExtractionsEndpoints
         var original = await db.Extractions.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
         if (original is null) return Results.NotFound();
+        if (!t.IsAdmin && original.ApiKeyId != t.ApiKeyId) return Results.NotFound();
         if (string.IsNullOrEmpty(original.StorageKey))
             return Results.BadRequest(new { error = "original_not_stored", detail = "Re-run requires the original file to have been stored (store_originals=true on the API key used for upload)." });
 
