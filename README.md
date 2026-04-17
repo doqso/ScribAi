@@ -44,6 +44,9 @@ ScribAi recibe documentos administrativos heterogéneos (facturas, contratos, al
                   │              │     └─────────────┘
                   │              │     ┌─────────────┐
                   │              │────▶│  Ollama ext │
+                  │              │     └─────────────┘
+                  │              │     ┌─────────────┐
+                  │              │────▶│  Seq  ext   │ (logs)
                   └──────┬───────┘     └─────────────┘
                          │
                          ▼
@@ -53,7 +56,7 @@ ScribAi recibe documentos administrativos heterogéneos (facturas, contratos, al
                  └──────────────┘
 ```
 
-**Dos servicios en Compose** (`api` + `web`) + stack de dependencias (`postgres`, `redis`, `minio`). **Ollama corre fuera del stack**: tú decides si en el host, en otro contenedor, o en otra máquina con GPU. ScribAi solo necesita la URL.
+**Dos servicios en Compose** (`api` + `web`) + stack de dependencias (`postgres`, `redis`, `minio`). **Ollama y Seq corren fuera del stack**: tú decides dónde. ScribAi solo necesita las URLs (Ollama via env, Seq via panel admin).
 
 ---
 
@@ -61,38 +64,61 @@ ScribAi recibe documentos administrativos heterogéneos (facturas, contratos, al
 
 ```
 documento ──▶ detección MIME (magic bytes)
-          ├─ PDF nativo       → PdfPig              ┐
-          ├─ docx / xlsx      → OpenXml             │
-          ├─ eml / msg        → MimeKit             ├─▶ LLM texto (qwen2.5:7b-instruct)
-          ├─ txt / csv        → lector plano        │         │
-          └─ imagen / TIFF    → ImageSharp + Tesseract CLI   │
-                                   │                          │
-                                   ▼ confianza < 0.6          │
-                               LLM vision (llama3.2-vision) ──┤
-                                                              ▼
-                                                   JSON ⟶ validación
-                                                       NJsonSchema
-                                                          │
-                                       ✔ match schema ────┘
-                                       ✘ retry 1× con feedback del error
+          ├─ PDF nativo       → PdfPig (texto)           ┐
+          ├─ PDF escaneado    → PDFtoImage @200dpi       │
+          │                     → Tesseract CLI por página│
+          ├─ docx / xlsx      → OpenXml                  ├─▶ LLM texto
+          ├─ eml / msg        → MimeKit                  │   (qwen2.5:7b-instruct)
+          ├─ txt / csv        → lector plano             │         │
+          └─ imagen / TIFF    → ImageSharp + Tesseract   │         │
+                                   │                              │
+                                   ▼ confianza < 0.6              │
+                               LLM vision (llama3.2-vision) ──────┤
+                                                                  ▼
+                                                       JSON ⟶ validación
+                                                           NJsonSchema
+                                                              │
+                                           ✔ match schema ────┘
+                                           ✘ retry 1× con feedback del error
 ```
 
-- **LLM se usa siempre** para construir el JSON final (texto o vision).
-- **OCR (Tesseract CLI)** solo cuando el input es imagen.
-- **Vision model** actúa como fallback si Tesseract no se fía de su lectura, o si el PDF es escaneado puro.
+- **LLM siempre** para construir el JSON final (texto o vision).
+- **OCR (Tesseract CLI)** para imágenes y PDFs escaneados (rasterizados con PDFium).
+- **Vision model** como fallback si confianza OCR < 0.6.
 - **Structured outputs de Ollama** (`format` = JSON Schema) + validación `NJsonSchema` + reintento con el error como feedback: el LLM casi nunca miente el schema.
 
 ---
 
 ## Características
 
-- **Multi-tenant** — cada API key pertenece a un tenant, con sus propios schemas, webhooks, extracciones. Aislamiento total en BD.
-- **Esquemas versionados** — crear `v1`, `v2`, `v3` sin romper integraciones existentes.
-- **Sync + async** — documentos pequeños (`< 2 MB` por defecto) se procesan en la respuesta HTTP; los grandes van a cola Redis Streams y se notifica por webhook cuando acaban.
-- **Webhooks con HMAC** — firma `X-Scribai-Signature` (sha256), reintentos exponenciales hasta 5 veces.
-- **Retención configurable** — `store_originals` por API key: guarda el fichero en MinIO o descártalo al momento.
-- **Privacidad total** — ningún dato sale de tu red. Ollama, BD, storage, API: todo self-hosted.
-- **OpenAPI** — `GET /openapi/v1.json` expone el contrato entero.
+### Core
+- **Multi-tenant** con API keys. Admin ve todo el tenant. Keys no-admin solo ven sus propias extracciones (schemas/webhooks sí son compartidos por tenant).
+- **Esquemas versionados** — `v1`, `v2`, `v3` sin romper integraciones.
+- **Sync + async** — `<2 MB` en respuesta HTTP; más grandes → cola Redis Streams → webhook al terminar.
+- **Webhooks HMAC** — firma `X-Scribai-Signature` (sha256), reintentos exponenciales configurables.
+- **Retención configurable** — `store_originals` por API key: guarda en MinIO o descarta en memoria.
+
+### Panel admin (hot-reload, sin reinicio)
+- **Configuración por tenant** — modelos default/vision (dropdown con modelos instalados via `/api/tags`), timeout Ollama, webhooks max attempts + delivery timeout.
+- **Configuración global** — Seq URL + API key (AES-GCM cifrada) + nivel mínimo + `Application` label; lista de orígenes CORS editable + toggle allow-any.
+- **Audit log** — cada mutación (settings, schemas, webhooks, keys) queda registrada con `tenant_id`, `api_key_id`, evento, detalle JSONB.
+- **Test de modelo / Seq** — botones "Probar" invocan el backend real.
+
+### Observabilidad
+- **Serilog** → stdout + Seq (dinámico, opcional). Logs enriquecidos con `TenantId`, `ApiKeyId`, `ExtractionId`, duraciones por paso, tokens.
+- **`Application` tag** en Seq para separar instancias de ScribAi.
+
+### UX
+- **Editor Monaco** (lazy-loaded) para crear schemas y ver JSON resultado con syntax highlighting.
+- **Comparador doc ↔ JSON** en detail de extracción (PDF embebido / imagen / texto a la izquierda, JSON Monaco readonly a la derecha).
+- **Re-extraer sin reupload** — si el original se guardó en MinIO, botón para re-ejecutar con otro schema o modelo (genera nueva extracción, preserva historial).
+- **Streaming SSE** — toggle "ver progreso en vivo" durante upload; recibes eventos `started → extracting_text → calling_llm → validating_schema → done` por `text/event-stream`.
+- **Export** — descarga JSON de una extracción; descarga CSV agregando múltiples extracciones con mismo schema (dot-notation para campos anidados).
+
+### Plataforma
+- **OpenAPI** — `/openapi/v1.json`.
+- **Cifrado de secretos** — AES-256-GCM con `SCRIBAI_SECRETS_KEY` master key.
+- **EF Core migrations** automáticas al arranque.
 
 ---
 
@@ -101,16 +127,21 @@ documento ──▶ detección MIME (magic bytes)
 ```bash
 # 1. Configura
 cp .env.example .env
+# genera la clave master de cifrado (obligatoria):
+openssl rand -base64 32     # copia en SCRIBAI_SECRETS_KEY del .env
 
 # 2. Levanta Ollama externo y baja los modelos
 ollama serve
 ollama pull qwen2.5:7b-instruct      # texto
 ollama pull llama3.2-vision          # fallback imágenes/escaneados
 
-# 3. Levanta el stack
+# 3. (Opcional) Levanta Seq para logs estructurados
+docker run -d -p 5341:80 -e ACCEPT_EULA=Y datalust/seq:latest
+
+# 4. Levanta el stack ScribAi
 docker compose up -d --build
 
-# 4. Bootstrap inicial (solo funciona la primera vez)
+# 5. Bootstrap inicial (solo funciona la primera vez)
 curl -X POST http://localhost:8082/v1/bootstrap \
   -H "Content-Type: application/json" \
   -d '{"tenantName":"Acme","keyLabel":"admin"}'
@@ -122,6 +153,7 @@ Listo:
 - **UI Web** → http://localhost:8090
 - **API** → http://localhost:8082
 - **MinIO Console** → http://localhost:9001 (`scribai` / `scribaipass`)
+- **Seq (si lo levantaste)** → http://localhost:5341 (config URL en UI → Configuración → Global)
 
 ---
 
@@ -130,20 +162,51 @@ Listo:
 Header obligatorio en toda petición: `X-API-Key: sk_...`
 
 ```http
-POST   /v1/extractions          # multipart: file + (schema | schemaId) + async? + webhookUrl? + model?
+# Extracciones
+POST   /v1/extractions                   # multipart: file + (schema | schemaId) + async? + webhookUrl? + model?
+POST   /v1/extractions/stream            # igual pero respuesta SSE con progreso
+POST   /v1/extractions/{id}/rerun        # { schemaId? | schema?, model? } — reusa original guardado
 GET    /v1/extractions/{id}
 GET    /v1/extractions?status=&page=&pageSize=
+GET    /v1/extractions/{id}/original     # descarga archivo original (si se guardó)
+GET    /v1/extractions/{id}/export.json
+GET    /v1/extractions/export.csv?schemaId=X
 
-POST   /v1/schemas              # { name, jsonSchema, description? }
+# Schemas (versionados)
+POST   /v1/schemas                       # { name, jsonSchema, description? }
 GET    /v1/schemas
 GET    /v1/schemas/by-name/{name}/latest
+DELETE /v1/schemas/{id}
 
-POST   /v1/webhooks             # { url, events[] }
+# Webhooks
+POST   /v1/webhooks                      # { url, events[] }
 POST   /v1/webhooks/{id}/test
+GET    /v1/webhooks
+DELETE /v1/webhooks/{id}
 
-POST   /v1/keys                 # admin-only; devuelve la key en claro UNA vez
+# Identidad
+GET    /v1/me                            # contexto actual (tenantId, apiKeyId, isAdmin)
 
-GET    /healthz   /readyz
+# Admin-only
+POST   /v1/keys                          # genera key nueva; plain devuelto UNA vez
+GET    /v1/keys
+DELETE /v1/keys/{id}
+
+GET    /v1/settings                      # config tenant (con defaults resueltos)
+PUT    /v1/settings
+GET    /v1/settings/models               # proxy a Ollama /api/tags
+POST   /v1/settings/models/test
+
+GET    /v1/admin/global                  # Seq + CORS + Application
+PUT    /v1/admin/global
+POST   /v1/admin/global/seq/test
+
+GET    /v1/admin/audit?page=&eventType=
+
+# Bootstrap + salud
+POST   /v1/bootstrap                     # crea primer tenant (solo funciona si BD vacía)
+GET    /healthz
+GET    /readyz
 GET    /openapi/v1.json
 ```
 
@@ -172,23 +235,49 @@ Respuesta:
 
 ---
 
-## Configuración (variables de entorno)
+## Configuración
+
+### Variables de entorno (infraestructura)
 
 | Variable | Default | Descripción |
 |---|---|---|
-| `ConnectionStrings__Postgres` | `Host=postgres;Database=scribai;...` | Conexión BD |
-| `Ollama__BaseUrl` | `http://host.docker.internal:11434` | URL de tu Ollama |
-| `Ollama__DefaultModel` | `qwen2.5:7b-instruct` | Modelo texto por defecto |
-| `Ollama__VisionModel` | `llama3.2-vision` | Modelo visión fallback |
+| `SCRIBAI_SECRETS_KEY` | **(obligatoria)** | Clave master AES-256 base64 (32 bytes) para cifrar secretos en BD |
+| `ConnectionStrings__Postgres` | `Host=postgres;...` | Conexión BD |
+| `Ollama__BaseUrl` | `http://host.docker.internal:11434` | URL Ollama |
+| `Ollama__DefaultModel` | `qwen2.5:7b-instruct` | Modelo texto por defecto (override por tenant en panel) |
+| `Ollama__VisionModel` | `llama3.2-vision` | Modelo visión (override por tenant) |
 | `Redis__ConnectionString` | `redis:6379` | — |
 | `Storage__Endpoint` | `minio:9000` | — |
 | `Processing__SyncMaxBytes` | `2097152` | A partir de aquí, async obligatorio |
 | `Processing__MaxUploadBytes` | `52428800` | Límite duro de upload |
 | `Processing__TesseractLangs` | `spa+eng` | Idiomas OCR |
 | `Processing__OcrConfidenceThreshold` | `0.6` | Por debajo → fallback vision |
-| `Processing__WebhookMaxAttempts` | `5` | Reintentos webhook |
+| `Processing__WebhookMaxAttempts` | `5` | Reintentos webhook (override por tenant) |
 
 Puertos configurables vía `.env`: `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`.
+
+### Ajustes en runtime (panel admin)
+
+| Setting | Scope | Dónde |
+|---|---|---|
+| Modelo texto / vision | tenant | `/settings` |
+| Timeout Ollama | tenant | `/settings` |
+| Webhook max attempts / timeout | tenant | `/settings` |
+| Seq URL / API key / nivel mínimo / Application | global | `/settings` (sección Global) |
+| CORS: lista orígenes / allow-any | global | `/settings` (sección Global) |
+| Audit log readonly | tenant | `/audit` |
+
+---
+
+## Privacidad y roles
+
+| Recurso | Admin (tenant) | No-admin (solo su key) |
+|---|---|---|
+| Extractions | todas del tenant | solo las subidas con su key |
+| Schemas | compartidos | compartidos |
+| Webhooks | compartidos | compartidos |
+| API Keys CRUD | sí | — |
+| Settings / Audit / Global config | sí | — |
 
 ---
 
@@ -197,26 +286,29 @@ Puertos configurables vía `.env`: `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `RED
 ```
 ScribAi/
 ├── api/                              # .NET 10 Minimal API
-│   ├── Auth/                         # ApiKeyMiddleware, hasher, tenant context
+│   ├── Auth/                         # ApiKeyMiddleware, hasher, TenantContext
+│   ├── Cors/DynamicCorsPolicyProvider.cs   # CORS leído en runtime de GlobalSettings
 │   ├── Data/                         # DbContext + entidades + migraciones
-│   ├── Endpoints/                    # handlers por recurso
+│   ├── Endpoints/                    # handlers por recurso + Me, Settings, AdminGlobal, Audit, Export, Streaming
+│   ├── Logging/                      # DynamicSeqSink + TenantEnricher
 │   ├── Pipeline/
-│   │   ├── DocumentRouter.cs         # detección MIME → extractor
-│   │   ├── Extractors/               # Pdf / Image / Office / Email / PlainText
-│   │   ├── Ocr/TesseractOcr.cs       # wrapper CLI tesseract
-│   │   └── Llm/OllamaExtractor.cs    # /api/chat + format=JSON Schema + retry
+│   │   ├── DocumentRouter.cs
+│   │   ├── Extractors/               # Pdf (PDFtoImage + Tesseract) / Image / Office / Email / PlainText
+│   │   ├── Ocr/TesseractOcr.cs       # CLI wrapper
+│   │   └── Llm/OllamaExtractor.cs    # /api/chat + format=JSON Schema + retry + timeout configurable
 │   ├── Jobs/                         # Redis Streams worker + webhook dispatcher
-│   ├── Options/                      # config tipada
-│   ├── Services/                     # ExtractionService (orquestación)
+│   ├── Options/                      # config tipada estática
+│   ├── Security/SecretsProtector.cs  # AES-256-GCM
+│   ├── Services/                     # ExtractionService + TenantSettings + GlobalSettingsProvider + AuditLogger
 │   ├── Storage/                      # MinIO blob store
 │   ├── Program.cs                    # bootstrap
-│   └── Dockerfile                    # runtime con tesseract-ocr + spa/eng
+│   └── Dockerfile                    # runtime con tesseract-ocr + PDFium deps
 ├── web/                              # Angular 19 SPA
-│   ├── src/app/core/                 # ApiService, interceptor, auth guard
-│   ├── src/app/features/             # login, layout, extractions, schemas, webhooks, keys
+│   ├── src/app/core/                 # ApiService, auth + admin guards, Monaco wrapper
+│   ├── src/app/features/             # login, layout, extractions, schemas, webhooks, keys, settings, audit
 │   ├── nginx.conf                    # proxy /api → api:8080
-│   └── Dockerfile                    # build node → runtime nginx
-├── tests/ScribAi.Api.Tests/          # xUnit: hasher, MIME, LLM extractor
+│   └── Dockerfile                    # build node → runtime nginx + monaco assets
+├── tests/ScribAi.Api.Tests/          # xUnit
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
@@ -230,18 +322,19 @@ ScribAi/
 dotnet test
 ```
 
-Cobertura inicial: hash de API keys, detección de MIME por magic bytes, validación + retry del extractor LLM con mock HTTP.
+Cobertura: hash de API keys, detección de MIME por magic bytes, validación + retry del extractor LLM con mock HTTP, roundtrip del cifrado AES-GCM + resistencia a tampering.
 
 ---
 
-## Roadmap / pendientes
+## Roadmap
 
-- [ ] **Rasterizar PDFs escaneados** página a página (hoy el fallback manda el PDF entero a vision). Candidato: `Docnet.Core` o `PDFtoImage`.
-- [ ] **Editor JSON Schema con Monaco** en la UI (ahora textarea plano).
-- [ ] **Diff entre versiones de schema** en UI.
-- [ ] **Log de entregas de webhooks** visible en UI.
-- [ ] **Rate limit por tenant**.
-- [ ] **Importador de plantillas** (factura, DNI, nómina ES) preconfiguradas.
+- [ ] **Rate limit por tenant** con límites configurables desde panel.
+- [ ] **Log de entregas webhooks** visible en UI (tabla `webhook_deliveries` ya existe).
+- [ ] **Importador de plantillas** (factura ES, DNI, nómina) preconfiguradas.
+- [ ] **Métricas tenant** — extracciones/día, tokens, tasa éxito, modelos usados.
+- [ ] **CI GitHub Actions** — `dotnet test` + `ng build` + docker build on PR.
+- [ ] **Testcontainers** — tests integración con postgres/redis/minio reales.
+- [ ] **OpenTelemetry traces** hacia Tempo/Jaeger.
 
 ---
 
