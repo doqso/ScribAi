@@ -36,7 +36,7 @@ import { ExtractionDto, SchemaDto } from '../../core/models';
     @else {
       <table>
         <thead>
-          <tr><th>Archivo</th><th>Estado</th><th>Método</th><th>Modelo</th><th>Creado</th><th></th></tr>
+          <tr><th>Archivo</th><th>Estado</th><th>Método</th><th>Modelo</th><th>Creado</th><th class="actions-col"></th></tr>
         </thead>
         <tbody>
           @for (e of items(); track e.id) {
@@ -47,8 +47,8 @@ import { ExtractionDto, SchemaDto } from '../../core/models';
               <td>{{ e.model }}</td>
               <td>{{ e.createdAt | date:'short' }}</td>
               <td class="row-actions">
-                <a [routerLink]="['/extractions', e.id]">Ver</a>
-                <button class="danger" (click)="remove(e.id)">Borrar</button>
+                <a class="btn" [routerLink]="['/extractions', e.id]">Ver</a>
+                <button class="btn danger" (click)="remove(e.id)">Borrar</button>
               </td>
             </tr>
           }
@@ -78,9 +78,17 @@ import { ExtractionDto, SchemaDto } from '../../core/models';
     .pager { display:flex; gap:1rem; align-items:center; margin-top:1rem; }
     .pager button { background:#1c1c1c; color:#eee; border:1px solid #333; padding:0.4rem 0.8rem; border-radius:4px; cursor:pointer; }
     .pager button:disabled { opacity:0.4; cursor:not-allowed; }
-    a { color:#60a5fa; }
-    .row-actions { display:flex; gap:0.5rem; align-items:center; }
-    .row-actions button.danger { background:#b91c1c; color:#fff; border:none; padding:0.3rem 0.6rem; border-radius:4px; cursor:pointer; font-size:0.8rem; }
+    .row-actions { display:flex; gap:0.4rem; align-items:center; justify-content:flex-end; }
+    .row-actions .btn {
+      background:#3b82f6; color:#fff; border:none;
+      padding:0.35rem 0.8rem; border-radius:4px;
+      font-size:0.85rem; font-weight:500;
+      text-decoration:none; cursor:pointer; line-height:1.2;
+      display:inline-block;
+    }
+    .row-actions .btn:hover { background:#2563eb; }
+    .row-actions .btn.danger { background:#b91c1c; }
+    .row-actions .btn.danger:hover { background:#991b1b; }
   `]
 })
 export class ExtractionsListComponent implements OnInit {
