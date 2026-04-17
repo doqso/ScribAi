@@ -33,6 +33,7 @@ public class DynamicSeqSink : ILogEventSink, IDisposable
             var level = ParseLevel(cfg.SeqMinimumLevel);
             var lc = new LoggerConfiguration()
                 .MinimumLevel.Is(level)
+                .Enrich.WithProperty("Application", cfg.ApplicationName)
                 .WriteTo.Seq(cfg.SeqUrl, apiKey: string.IsNullOrWhiteSpace(cfg.SeqApiKey) ? null : cfg.SeqApiKey);
             _innerLogger = lc.CreateLogger();
         }

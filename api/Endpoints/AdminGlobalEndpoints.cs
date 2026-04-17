@@ -12,6 +12,7 @@ public static class AdminGlobalEndpoints
         string? SeqUrl,
         bool HasSeqApiKey,
         string SeqMinimumLevel,
+        string ApplicationName,
         DateTimeOffset UpdatedAt
     );
 
@@ -20,7 +21,8 @@ public static class AdminGlobalEndpoints
         string? SeqUrl,
         string? SeqApiKey,
         bool ClearSeqApiKey,
-        string SeqMinimumLevel
+        string SeqMinimumLevel,
+        string? ApplicationName
     );
 
     public record SeqTestResult(bool Ok, string? Error);
@@ -36,7 +38,7 @@ public static class AdminGlobalEndpoints
             var row = await provider.GetRawAsync(ct);
             return Results.Ok(new GlobalDto(
                 row.SeqEnabled, row.SeqUrl, row.SeqApiKeyEncrypted is { Length: > 0 },
-                row.SeqMinimumLevel, row.UpdatedAt));
+                row.SeqMinimumLevel, row.ApplicationName, row.UpdatedAt));
         });
 
         g.MapPut("/", async (GlobalUpdateRequest req, HttpContext ctx, IGlobalSettingsProvider provider, ISecretsProtector secrets, CancellationToken ct) =>
@@ -59,6 +61,8 @@ public static class AdminGlobalEndpoints
                 row.SeqEnabled = req.SeqEnabled;
                 row.SeqUrl = string.IsNullOrWhiteSpace(req.SeqUrl) ? null : req.SeqUrl.TrimEnd('/');
                 row.SeqMinimumLevel = level;
+                if (!string.IsNullOrWhiteSpace(req.ApplicationName))
+                    row.ApplicationName = req.ApplicationName.Trim();
 
                 if (req.ClearSeqApiKey) row.SeqApiKeyEncrypted = null;
                 else if (!string.IsNullOrWhiteSpace(req.SeqApiKey))
@@ -68,7 +72,7 @@ public static class AdminGlobalEndpoints
             var fresh = await provider.GetRawAsync(ct);
             return Results.Ok(new GlobalDto(
                 fresh.SeqEnabled, fresh.SeqUrl, fresh.SeqApiKeyEncrypted is { Length: > 0 },
-                fresh.SeqMinimumLevel, fresh.UpdatedAt));
+                fresh.SeqMinimumLevel, fresh.ApplicationName, fresh.UpdatedAt));
         });
 
         g.MapPost("/seq/test", (HttpContext ctx, IGlobalSettingsProvider provider) =>

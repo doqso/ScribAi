@@ -9,7 +9,8 @@ public record ResolvedGlobalSettings(
     bool SeqEnabled,
     string? SeqUrl,
     string? SeqApiKey,
-    string SeqMinimumLevel
+    string SeqMinimumLevel,
+    string ApplicationName
 );
 
 public interface IGlobalSettingsProvider
@@ -26,7 +27,7 @@ public class GlobalSettingsProvider(
     ISecretsProtector secrets,
     ILogger<GlobalSettingsProvider> log) : IGlobalSettingsProvider
 {
-    private ResolvedGlobalSettings _current = new(false, null, null, "Information");
+    private ResolvedGlobalSettings _current = new(false, null, null, "Information", "ScribAi");
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public ResolvedGlobalSettings Current => _current;
@@ -61,7 +62,8 @@ public class GlobalSettingsProvider(
                 SeqEnabled: row.SeqEnabled,
                 SeqUrl: row.SeqUrl,
                 SeqApiKey: plainKey,
-                SeqMinimumLevel: row.SeqMinimumLevel);
+                SeqMinimumLevel: row.SeqMinimumLevel,
+                ApplicationName: string.IsNullOrWhiteSpace(row.ApplicationName) ? "ScribAi" : row.ApplicationName);
 
             log.LogInformation("Global settings reloaded: seq_enabled={Enabled} url={Url}", _current.SeqEnabled, _current.SeqUrl);
             Changed?.Invoke(_current);

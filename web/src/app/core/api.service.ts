@@ -59,7 +59,7 @@ export class ApiService {
   }
 
   getGlobal() { return this.http.get<GlobalSettingsDto>(`${this.base}/v1/admin/global/`); }
-  putGlobal(body: { seqEnabled: boolean; seqUrl: string | null; seqApiKey: string | null; clearSeqApiKey: boolean; seqMinimumLevel: string }) {
+  putGlobal(body: { seqEnabled: boolean; seqUrl: string | null; seqApiKey: string | null; clearSeqApiKey: boolean; seqMinimumLevel: string; applicationName: string }) {
     return this.http.put<GlobalSettingsDto>(`${this.base}/v1/admin/global/`, body);
   }
   testSeq() { return this.http.post<SeqTestResult>(`${this.base}/v1/admin/global/seq/test`, {}); }

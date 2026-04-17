@@ -78,6 +78,11 @@ import { GlobalSettingsDto, OllamaModelInfo, TenantSettingsDto } from '../../cor
           </label>
 
           <label>
+            Application (etiqueta del proyecto en Seq)
+            <input [(ngModel)]="appName" name="an" placeholder="ScribAi" />
+          </label>
+
+          <label>
             URL Seq
             <input [(ngModel)]="seqUrl" name="su" placeholder="http://host.docker.internal:5341" />
           </label>
@@ -153,6 +158,7 @@ export class SettingsComponent implements OnInit {
   seqUrl = signal('');
   seqKey = signal('');
   seqLevel = signal('Information');
+  appName = signal('ScribAi');
   changingKey = signal(false);
   clearKey = signal(false);
 
@@ -184,6 +190,7 @@ export class SettingsComponent implements OnInit {
       this.seqEnabled.set(g.seqEnabled);
       this.seqUrl.set(g.seqUrl ?? '');
       this.seqLevel.set(g.seqMinimumLevel);
+      this.appName.set(g.applicationName ?? 'ScribAi');
     });
   }
 
@@ -224,7 +231,8 @@ export class SettingsComponent implements OnInit {
       seqUrl: this.seqUrl() || null,
       seqApiKey: this.seqKey() || null,
       clearSeqApiKey: this.clearKey(),
-      seqMinimumLevel: this.seqLevel()
+      seqMinimumLevel: this.seqLevel(),
+      applicationName: this.appName() || 'ScribAi'
     }).subscribe({
       next: g => {
         this.globalCfg.set(g);

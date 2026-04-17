@@ -99,6 +99,7 @@ export interface GlobalSettingsDto {
   seqUrl: string | null;
   hasSeqApiKey: boolean;
   seqMinimumLevel: string;
+  applicationName: string;
   updatedAt: string;
 }
 

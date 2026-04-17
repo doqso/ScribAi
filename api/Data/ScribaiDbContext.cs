@@ -97,6 +97,7 @@ public class ScribaiDbContext(DbContextOptions<ScribaiDbContext> options) : DbCo
             e.ToTable(t => t.HasCheckConstraint("ck_global_settings_singleton", "\"Id\" = 1"));
             e.Property(x => x.SeqUrl).HasMaxLength(500);
             e.Property(x => x.SeqMinimumLevel).HasMaxLength(20);
+            e.Property(x => x.ApplicationName).HasMaxLength(100).IsRequired();
         });
     }
 }
