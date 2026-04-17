@@ -21,9 +21,14 @@ public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogg
         string jsonSchema,
         string model,
         IReadOnlyList<byte[]>? images = null,
+        TimeSpan? perRequestTimeout = null,
         CancellationToken ct = default)
     {
         model = string.IsNullOrWhiteSpace(model) ? _opt.DefaultModel : model;
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (perRequestTimeout is { } t && t > TimeSpan.Zero) linkedCts.CancelAfter(t);
+        ct = linkedCts.Token;
 
         var schemaNode = JsonNode.Parse(jsonSchema)
             ?? throw new ArgumentException("Invalid JSON Schema", nameof(jsonSchema));

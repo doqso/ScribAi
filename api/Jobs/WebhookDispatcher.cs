@@ -1,8 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using ScribAi.Api.Data;
 using ScribAi.Api.Data.Entities;
-using ScribAi.Api.Options;
+using ScribAi.Api.Services;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -12,13 +11,15 @@ namespace ScribAi.Api.Jobs;
 public class WebhookDispatcher(
     HttpClient http,
     IDbContextFactory<ScribaiDbContext> dbFactory,
-    IOptions<ProcessingOptions> opt,
+    ITenantSettingsService tenantSettings,
     ILogger<WebhookDispatcher> log)
 {
-    private readonly int _maxAttempts = opt.Value.WebhookMaxAttempts;
-
     public async Task DispatchAsync(Extraction ext, CancellationToken ct)
     {
+        var cfg = await tenantSettings.GetAsync(ext.TenantId, ct);
+        var maxAttempts = cfg.WebhookMaxAttempts;
+        var deliveryTimeout = TimeSpan.FromSeconds(cfg.WebhookTimeoutSeconds);
+
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var evt = ext.Status == ExtractionStatus.Succeeded ? "extraction.succeeded" : "extraction.failed";
 
@@ -33,11 +34,12 @@ public class WebhookDispatcher(
 
         foreach (var hook in hooks)
         {
-            await TryDeliverAsync(hook, ext, evt, db, ct);
+            await TryDeliverAsync(hook, ext, evt, db, maxAttempts, deliveryTimeout, ct);
         }
     }
 
-    private async Task TryDeliverAsync(Webhook hook, Extraction ext, string evt, ScribaiDbContext db, CancellationToken ct)
+    private async Task TryDeliverAsync(Webhook hook, Extraction ext, string evt, ScribaiDbContext db,
+        int maxAttempts, TimeSpan deliveryTimeout, CancellationToken ct)
     {
         var payload = JsonSerializer.Serialize(new
         {
@@ -51,7 +53,7 @@ public class WebhookDispatcher(
             finishedAt = ext.FinishedAt
         });
 
-        for (var attempt = 1; attempt <= _maxAttempts; attempt++)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             var delivery = new WebhookDelivery
             {
@@ -75,12 +77,11 @@ public class WebhookDispatcher(
                 req.Headers.Add("X-Scribai-Event", evt);
 
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(15));
+                cts.CancelAfter(deliveryTimeout);
                 using var resp = await http.SendAsync(req, cts.Token);
                 delivery.StatusCode = (int)resp.StatusCode;
-                delivery.Response = (await resp.Content.ReadAsStringAsync(ct)).Length > 2000
-                    ? (await resp.Content.ReadAsStringAsync(ct))[..2000]
-                    : await resp.Content.ReadAsStringAsync(ct);
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                delivery.Response = body.Length > 2000 ? body[..2000] : body;
 
                 if (resp.IsSuccessStatusCode)
                 {
@@ -99,7 +100,7 @@ public class WebhookDispatcher(
             if (hook.Id != Guid.Empty) db.WebhookDeliveries.Add(delivery);
             await db.SaveChangesAsync(ct);
 
-            if (attempt < _maxAttempts)
+            if (attempt < maxAttempts)
                 await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
         }
     }

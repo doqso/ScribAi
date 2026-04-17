@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { ExtractionDto, ExtractionList, KeyCreatedDto, KeyDto, SchemaDto, WebhookDto } from './models';
+import { ExtractionDto, ExtractionList, GlobalSettingsDto, KeyCreatedDto, KeyDto, MeDto, OllamaModelInfo, SchemaDto, SeqTestResult, TenantSettingsDto, TestModelResult, WebhookDto } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -46,4 +46,21 @@ export class ApiService {
     return this.http.post<KeyCreatedDto>(`${this.base}/v1/keys/`, body);
   }
   revokeKey(id: string) { return this.http.delete(`${this.base}/v1/keys/${id}`); }
+
+  me() { return this.http.get<MeDto>(`${this.base}/v1/me`); }
+
+  getSettings() { return this.http.get<TenantSettingsDto>(`${this.base}/v1/settings/`); }
+  putSettings(body: Partial<Record<string, unknown>>) {
+    return this.http.put<TenantSettingsDto>(`${this.base}/v1/settings/`, body);
+  }
+  listModels() { return this.http.get<OllamaModelInfo[]>(`${this.base}/v1/settings/models`); }
+  testModel(model: string) {
+    return this.http.post<TestModelResult>(`${this.base}/v1/settings/models/test`, { model });
+  }
+
+  getGlobal() { return this.http.get<GlobalSettingsDto>(`${this.base}/v1/admin/global/`); }
+  putGlobal(body: { seqEnabled: boolean; seqUrl: string | null; seqApiKey: string | null; clearSeqApiKey: boolean; seqMinimumLevel: string }) {
+    return this.http.put<GlobalSettingsDto>(`${this.base}/v1/admin/global/`, body);
+  }
+  testSeq() { return this.http.post<SeqTestResult>(`${this.base}/v1/admin/global/seq/test`, {}); }
 }

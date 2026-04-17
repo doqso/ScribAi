@@ -55,3 +55,54 @@ export interface KeyDto {
 export interface KeyCreatedDto extends KeyDto {
   key: string;
 }
+
+export interface MeDto {
+  tenantId: string;
+  apiKeyId: string;
+  isAdmin: boolean;
+  storeOriginals: boolean;
+  defaultModel: string;
+}
+
+export interface ResolvedTenantSettings {
+  tenantId: string;
+  defaultTextModel: string;
+  visionModel: string;
+  ollamaTimeoutSeconds: number;
+  webhookMaxAttempts: number;
+  webhookTimeoutSeconds: number;
+}
+
+export interface TenantSettingsDto {
+  defaultTextModel: string | null;
+  visionModel: string | null;
+  ollamaTimeoutSeconds: number | null;
+  webhookMaxAttempts: number | null;
+  webhookTimeoutSeconds: number | null;
+  effective: ResolvedTenantSettings;
+}
+
+export interface OllamaModelInfo {
+  name: string;
+  size: number | null;
+}
+
+export interface TestModelResult {
+  ok: boolean;
+  response: string | null;
+  error: string | null;
+  elapsedMs: number;
+}
+
+export interface GlobalSettingsDto {
+  seqEnabled: boolean;
+  seqUrl: string | null;
+  hasSeqApiKey: boolean;
+  seqMinimumLevel: string;
+  updatedAt: string;
+}
+
+export interface SeqTestResult {
+  ok: boolean;
+  error: string | null;
+}

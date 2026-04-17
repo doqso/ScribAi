@@ -11,6 +11,8 @@ public class ScribaiDbContext(DbContextOptions<ScribaiDbContext> options) : DbCo
     public DbSet<Extraction> Extractions => Set<Extraction>();
     public DbSet<Webhook> Webhooks => Set<Webhook>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
+    public DbSet<GlobalSettings> GlobalSettings => Set<GlobalSettings>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -76,6 +78,25 @@ public class ScribaiDbContext(DbContextOptions<ScribaiDbContext> options) : DbCo
             e.HasIndex(x => new { x.WebhookId, x.CreatedAt });
             e.Property(x => x.Event).HasMaxLength(100);
             e.Property(x => x.Response).HasColumnType("text");
+        });
+
+        b.Entity<TenantSettings>(e =>
+        {
+            e.ToTable("tenant_settings");
+            e.HasKey(x => x.TenantId);
+            e.Property(x => x.DefaultTextModel).HasMaxLength(200);
+            e.Property(x => x.VisionModel).HasMaxLength(200);
+            e.HasOne(x => x.Tenant).WithOne().HasForeignKey<TenantSettings>(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<GlobalSettings>(e =>
+        {
+            e.ToTable("global_settings");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.ToTable(t => t.HasCheckConstraint("ck_global_settings_singleton", "\"Id\" = 1"));
+            e.Property(x => x.SeqUrl).HasMaxLength(500);
+            e.Property(x => x.SeqMinimumLevel).HasMaxLength(20);
         });
     }
 }

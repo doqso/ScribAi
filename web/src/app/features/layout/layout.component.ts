@@ -1,6 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { ApiService } from '../../core/api.service';
 
 @Component({
   selector: 'app-layout',
@@ -13,6 +14,9 @@ import { AuthService } from '../../core/auth.service';
         <a routerLink="/schemas" routerLinkActive="active">Schemas</a>
         <a routerLink="/webhooks" routerLinkActive="active">Webhooks</a>
         <a routerLink="/keys" routerLinkActive="active">API Keys</a>
+        @if (isAdmin()) {
+          <a routerLink="/settings" routerLinkActive="active">Configuración</a>
+        }
       </nav>
       <button class="logout" (click)="logout()">Cerrar sesión</button>
     </aside>
@@ -30,8 +34,18 @@ import { AuthService } from '../../core/auth.service';
     main { padding:1.5rem 2rem; overflow:auto; }
   `]
 })
-export class LayoutComponent {
+export class LayoutComponent implements OnInit {
   private auth = inject(AuthService);
+  private api = inject(ApiService);
   private router = inject(Router);
+  isAdmin = signal(false);
+
+  ngOnInit() {
+    this.api.me().subscribe({
+      next: me => this.isAdmin.set(me.isAdmin),
+      error: () => this.isAdmin.set(false)
+    });
+  }
+
   logout() { this.auth.clear(); this.router.navigateByUrl('/login'); }
 }

@@ -73,6 +73,7 @@ services:
       Processing__TesseractLangs: ${TESSERACT_LANGS:-spa+eng}
       Processing__SyncMaxBytes: ${SYNC_MAX_BYTES:-2097152}
       Processing__MaxUploadBytes: ${MAX_UPLOAD_BYTES:-52428800}
+      SCRIBAI_SECRETS_KEY: ${SCRIBAI_SECRETS_KEY}
     ports:
       - "${API_PORT:-8081}:8080"
     extra_hosts:

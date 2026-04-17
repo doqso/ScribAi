@@ -16,15 +16,19 @@ public class ExtractionService(
     IOllamaExtractor llm,
     IBlobStore blobs,
     WebhookDispatcher webhooks,
-    IOptions<OllamaOptions> ollamaOpt,
+    ITenantSettingsService tenantSettings,
     IOptions<ProcessingOptions> procOpt,
     ILogger<ExtractionService> log)
 {
     public async Task<Extraction> ProcessAsync(Extraction extraction, Stream content, bool storeOriginal, string model, CancellationToken ct)
     {
+        var settings = await tenantSettings.GetAsync(extraction.TenantId, ct);
+        var effectiveModel = !string.IsNullOrWhiteSpace(model) ? model : settings.DefaultTextModel;
+        var llmTimeout = TimeSpan.FromSeconds(settings.OllamaTimeoutSeconds);
+
         extraction.Status = ExtractionStatus.Running;
         extraction.StartedAt = DateTimeOffset.UtcNow;
-        extraction.Model = string.IsNullOrWhiteSpace(model) ? ollamaOpt.Value.DefaultModel : model;
+        extraction.Model = effectiveModel;
         await db.SaveChangesAsync(ct);
 
         try
@@ -45,14 +49,14 @@ public class ExtractionService(
             LlmExtractionResult result;
             if (useVision && doc.PageImages is { Count: > 0 })
             {
-                log.LogInformation("Using vision model {Model} (ocr_conf={Conf})", ollamaOpt.Value.VisionModel, doc.Confidence);
-                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, ollamaOpt.Value.VisionModel, doc.PageImages, ct);
+                log.LogInformation("Using vision model {Model} (ocr_conf={Conf})", settings.VisionModel, doc.Confidence);
+                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, settings.VisionModel, doc.PageImages, llmTimeout, ct);
                 extraction.ExtractionMethod = ExtractionMethod.Vision.ToString();
-                extraction.Model = ollamaOpt.Value.VisionModel;
+                extraction.Model = settings.VisionModel;
             }
             else
             {
-                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, extraction.Model, null, ct);
+                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, effectiveModel, null, llmTimeout, ct);
             }
 
             extraction.Result = result.Json;

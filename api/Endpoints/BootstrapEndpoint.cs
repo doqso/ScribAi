@@ -33,6 +33,7 @@ public static class BootstrapEndpoint
             };
             db.Tenants.Add(tenant);
             db.ApiKeys.Add(key);
+            db.TenantSettings.Add(new TenantSettings { TenantId = tenant.Id });
             await db.SaveChangesAsync(ct);
 
             return Results.Ok(new BootstrapResponse(tenant.Id, key.Id, plain));

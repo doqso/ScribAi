@@ -16,5 +16,6 @@ public interface IOllamaExtractor
         string jsonSchema,
         string model,
         IReadOnlyList<byte[]>? images = null,
+        TimeSpan? perRequestTimeout = null,
         CancellationToken ct = default);
 }

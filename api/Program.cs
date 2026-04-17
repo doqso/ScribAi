@@ -8,6 +8,7 @@ using ScribAi.Api.Pipeline;
 using ScribAi.Api.Pipeline.Extractors;
 using ScribAi.Api.Pipeline.Llm;
 using ScribAi.Api.Pipeline.Ocr;
+using ScribAi.Api.Security;
 using ScribAi.Api.Services;
 using ScribAi.Api.Storage;
 using Serilog;
@@ -15,10 +16,13 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Serilog bootstrap (no DI during config — sink and enricher are static singletons)
 builder.Host.UseSerilog((ctx, cfg) => cfg
     .ReadFrom.Configuration(ctx.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console());
+    .Enrich.With(new ScribAi.Api.Logging.TenantEnricher())
+    .WriteTo.Console()
+    .WriteTo.Sink(ScribAi.Api.Logging.DynamicSeqSinkHolder.Instance));
 
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection(OllamaOptions.Section));
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.Section));
@@ -38,11 +42,24 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer
 builder.Services.AddSingleton<IBlobStore, MinioBlobStore>();
 builder.Services.AddSingleton<ITesseractOcr, TesseractOcr>();
 
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<ISecretsProtector, SecretsProtector>();
+builder.Services.AddSingleton<IGlobalSettingsProvider, GlobalSettingsProvider>();
+builder.Services.AddSingleton<ITenantSettingsService, TenantSettingsService>();
+
 builder.Services.AddHttpClient<IOllamaExtractor, OllamaExtractor>((sp, c) =>
 {
     var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>().Value;
     c.BaseAddress = new Uri(opt.BaseUrl);
-    c.Timeout = TimeSpan.FromSeconds(opt.TimeoutSeconds);
+    c.Timeout = TimeSpan.FromMinutes(30);
+});
+
+builder.Services.AddHttpClient("ollama-meta", (sp, c) =>
+{
+    var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>().Value;
+    c.BaseAddress = new Uri(opt.BaseUrl);
+    c.Timeout = TimeSpan.FromSeconds(15);
 });
 
 builder.Services.AddHttpClient<WebhookDispatcher>();
@@ -66,6 +83,9 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+ScribAi.Api.Logging.TenantEnricher.UseAccessor(app.Services.GetRequiredService<IHttpContextAccessor>());
+ScribAi.Api.Logging.DynamicSeqSinkHolder.Instance.Attach(app.Services.GetRequiredService<IGlobalSettingsProvider>());
+
 app.UseSerilogRequestLogging();
 app.UseCors();
 
@@ -75,32 +95,33 @@ app.UseMiddleware<ApiKeyMiddleware>();
 
 app.MapHealth();
 app.MapBootstrap();
+app.MapMe();
 app.MapExtractions();
 app.MapSchemas();
 app.MapWebhooks();
 app.MapKeys();
+app.MapSettings();
+app.MapAdminGlobal();
 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ScribaiDbContext>();
-    try
-    {
-        await db.Database.MigrateAsync();
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogWarning(ex, "Initial DB migration failed — will retry on first request");
-    }
+    try { await db.Database.MigrateAsync(); }
+    catch (Exception ex) { app.Logger.LogWarning(ex, "Initial DB migration failed"); }
 
     try
     {
         var blob = scope.ServiceProvider.GetRequiredService<IBlobStore>();
         await blob.EnsureBucketAsync(CancellationToken.None);
     }
-    catch (Exception ex)
+    catch (Exception ex) { app.Logger.LogWarning(ex, "Bucket init failed"); }
+
+    try
     {
-        app.Logger.LogWarning(ex, "Bucket init failed");
+        var gs = scope.ServiceProvider.GetRequiredService<IGlobalSettingsProvider>();
+        await gs.ReloadAsync();
     }
+    catch (Exception ex) { app.Logger.LogWarning(ex, "Global settings initial load failed"); }
 }
 
 app.Run();

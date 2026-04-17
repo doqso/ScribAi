@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth.guard';
+import { adminGuard } from './core/admin.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'extractions' },
@@ -35,6 +36,11 @@ export const routes: Routes = [
       {
         path: 'keys',
         loadComponent: () => import('./features/keys/keys-list.component').then(m => m.KeysListComponent)
+      },
+      {
+        path: 'settings',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent)
       }
     ]
   },
