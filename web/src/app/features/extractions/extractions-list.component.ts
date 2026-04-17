@@ -1,12 +1,13 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
-import { ExtractionDto } from '../../core/models';
+import { ExtractionDto, SchemaDto } from '../../core/models';
 
 @Component({
   selector: 'app-extractions-list',
-  imports: [DatePipe, RouterLink],
+  imports: [DatePipe, FormsModule, RouterLink],
   template: `
     <div class="head">
       <h1>Extracciones</h1>
@@ -21,6 +22,14 @@ import { ExtractionDto } from '../../core/models';
         <option value="succeeded">Succeeded</option>
         <option value="failed">Failed</option>
       </select>
+
+      <select [(ngModel)]="exportSchemaId" name="esi">
+        <option [value]="''">-- elegir schema --</option>
+        @for (s of schemas(); track s.id) {
+          <option [value]="s.id">{{ s.name }} v{{ s.version }}</option>
+        }
+      </select>
+      <button (click)="exportCsv()" [disabled]="!exportSchemaId()">Exportar CSV</button>
     </div>
 
     @if (loading()) { <p>Cargando...</p> }
@@ -77,8 +86,26 @@ export class ExtractionsListComponent implements OnInit {
   total = signal(0);
   status = signal('');
   loading = signal(false);
+  schemas = signal<SchemaDto[]>([]);
+  exportSchemaId = signal('');
 
-  ngOnInit() { this.load(); }
+  ngOnInit() {
+    this.load();
+    this.api.listSchemas().subscribe(s => this.schemas.set(s));
+  }
+
+  exportCsv() {
+    const sid = this.exportSchemaId();
+    if (!sid) return;
+    this.api.exportCsv(sid).subscribe(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'scribai-export.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+  }
 
   totalPages() { return Math.max(1, Math.ceil(this.total() / this.pageSize)); }
 

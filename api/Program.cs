@@ -47,6 +47,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<ISecretsProtector, SecretsProtector>();
 builder.Services.AddSingleton<IGlobalSettingsProvider, GlobalSettingsProvider>();
 builder.Services.AddSingleton<ITenantSettingsService, TenantSettingsService>();
+builder.Services.AddSingleton<IAuditLogger, AuditLogger>();
 
 builder.Services.AddHttpClient<IOllamaExtractor, OllamaExtractor>((sp, c) =>
 {
@@ -75,9 +76,8 @@ builder.Services.AddScoped<ExtractionService>();
 builder.Services.AddSingleton<IJobQueue, RedisJobQueue>();
 builder.Services.AddHostedService<ExtractionWorker>();
 
-builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:4200"])
-     .AllowAnyHeader().AllowAnyMethod()));
+builder.Services.AddSingleton<Microsoft.AspNetCore.Cors.Infrastructure.ICorsPolicyProvider, ScribAi.Api.Cors.DynamicCorsPolicyProvider>();
+builder.Services.AddCors();
 
 builder.Services.AddOpenApi();
 
@@ -87,7 +87,7 @@ ScribAi.Api.Logging.TenantEnricher.UseAccessor(app.Services.GetRequiredService<I
 ScribAi.Api.Logging.DynamicSeqSinkHolder.Instance.Attach(app.Services.GetRequiredService<IGlobalSettingsProvider>());
 
 app.UseSerilogRequestLogging();
-app.UseCors();
+app.UseCors(p => { /* dynamic provider reads current GlobalSettings per request */ });
 
 app.MapOpenApi();
 
@@ -102,6 +102,9 @@ app.MapWebhooks();
 app.MapKeys();
 app.MapSettings();
 app.MapAdminGlobal();
+app.MapAudit();
+app.MapExports();
+app.MapStreaming();
 
 using (var scope = app.Services.CreateScope())
 {

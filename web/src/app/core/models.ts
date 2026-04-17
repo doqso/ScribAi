@@ -19,6 +19,7 @@ export interface ExtractionDto {
   extractionMethod: string;
   tokensIn?: number;
   tokensOut?: number;
+  extractedText?: string;
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
@@ -100,10 +101,29 @@ export interface GlobalSettingsDto {
   hasSeqApiKey: boolean;
   seqMinimumLevel: string;
   applicationName: string;
+  allowedOrigins: string[];
+  allowAnyOrigin: boolean;
   updatedAt: string;
 }
 
 export interface SeqTestResult {
   ok: boolean;
   error: string | null;
+}
+
+export interface AuditEventDto {
+  id: string;
+  tenantId: string | null;
+  apiKeyId: string | null;
+  eventType: string;
+  target: string | null;
+  details: string | null;
+  createdAt: string;
+}
+
+export interface AuditPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: AuditEventDto[];
 }

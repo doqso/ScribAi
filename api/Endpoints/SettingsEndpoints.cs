@@ -1,5 +1,6 @@
 using ScribAi.Api.Auth;
 using ScribAi.Api.Services;
+using ScribAi.Api.Endpoints; // IAuditLogger already via Services
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -49,7 +50,7 @@ public static class SettingsEndpoints
                 raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, eff));
         });
 
-        g.MapPut("/", async (SettingsUpdateRequest req, HttpContext ctx, ITenantSettingsService svc, CancellationToken ct) =>
+        g.MapPut("/", async (SettingsUpdateRequest req, HttpContext ctx, ITenantSettingsService svc, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             if (!t.IsAdmin) return Results.Forbid();
@@ -74,6 +75,7 @@ public static class SettingsEndpoints
 
             var raw = await svc.GetRawAsync(t.TenantId, ct);
             var eff = await svc.GetAsync(t.TenantId, ct);
+            await audit.LogAsync(ctx, "tenant_settings.updated", target: t.TenantId.ToString(), details: req, ct: ct);
             return Results.Ok(new SettingsDto(
                 raw.DefaultTextModel, raw.VisionModel, raw.OllamaTimeoutSeconds,
                 raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, eff));

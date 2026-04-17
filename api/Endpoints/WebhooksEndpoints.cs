@@ -3,6 +3,7 @@ using ScribAi.Api.Auth;
 using ScribAi.Api.Data;
 using ScribAi.Api.Data.Entities;
 using ScribAi.Api.Jobs;
+using ScribAi.Api.Services;
 using System.Security.Cryptography;
 
 namespace ScribAi.Api.Endpoints;
@@ -27,7 +28,7 @@ public static class WebhooksEndpoints
             return Results.Ok(list);
         });
 
-        g.MapPost("/", async (WebhookCreateRequest req, HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
+        g.MapPost("/", async (WebhookCreateRequest req, HttpContext ctx, ScribaiDbContext db, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             if (!Uri.TryCreate(req.Url, UriKind.Absolute, out _))
@@ -44,16 +45,19 @@ public static class WebhooksEndpoints
             };
             db.Webhooks.Add(hook);
             await db.SaveChangesAsync(ct);
+            await audit.LogAsync(ctx, "webhook.created", target: hook.Id.ToString(),
+                details: new { hook.Url, hook.Events }, ct: ct);
             return Results.Created($"/v1/webhooks/{hook.Id}",
                 new WebhookDto(hook.Id, hook.Url, hook.Events, hook.Active, hook.Secret, hook.CreatedAt));
         });
 
-        g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
+        g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             var deleted = await db.Webhooks
                 .Where(w => w.Id == id && w.TenantId == t.TenantId)
                 .ExecuteDeleteAsync(ct);
+            if (deleted > 0) await audit.LogAsync(ctx, "webhook.deleted", target: id.ToString(), ct: ct);
             return deleted > 0 ? Results.NoContent() : Results.NotFound();
         });
 

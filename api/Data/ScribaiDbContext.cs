@@ -13,6 +13,7 @@ public class ScribaiDbContext(DbContextOptions<ScribaiDbContext> options) : DbCo
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
     public DbSet<GlobalSettings> GlobalSettings => Set<GlobalSettings>();
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -98,6 +99,18 @@ public class ScribaiDbContext(DbContextOptions<ScribaiDbContext> options) : DbCo
             e.Property(x => x.SeqUrl).HasMaxLength(500);
             e.Property(x => x.SeqMinimumLevel).HasMaxLength(20);
             e.Property(x => x.ApplicationName).HasMaxLength(100).IsRequired();
+            e.Property(x => x.AllowedOrigins).HasColumnType("text[]");
+        });
+
+        b.Entity<AuditEvent>(e =>
+        {
+            e.ToTable("audit_events");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt });
+            e.HasIndex(x => x.EventType);
+            e.Property(x => x.EventType).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Target).HasMaxLength(500);
+            e.Property(x => x.Details).HasColumnType("jsonb");
         });
     }
 }

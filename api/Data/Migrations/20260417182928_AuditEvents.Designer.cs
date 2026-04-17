@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ScribAi.Api.Data;
@@ -11,9 +12,11 @@ using ScribAi.Api.Data;
 namespace ScribAi.Api.Data.Migrations
 {
     [DbContext(typeof(ScribaiDbContext))]
-    partial class ScribaiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260417182928_AuditEvents")]
+    partial class AuditEvents
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -202,13 +205,6 @@ namespace ScribAi.Api.Data.Migrations
                 {
                     b.Property<short>("Id")
                         .HasColumnType("smallint");
-
-                    b.Property<bool>("AllowAnyOrigin")
-                        .HasColumnType("boolean");
-
-                    b.PrimitiveCollection<string[]>("AllowedOrigins")
-                        .IsRequired()
-                        .HasColumnType("text[]");
 
                     b.Property<string>("ApplicationName")
                         .IsRequired()

@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { ExtractionDto, ExtractionList, GlobalSettingsDto, KeyCreatedDto, KeyDto, MeDto, OllamaModelInfo, SchemaDto, SeqTestResult, TenantSettingsDto, TestModelResult, WebhookDto } from './models';
+import { AuditPage, ExtractionDto, ExtractionList, GlobalSettingsDto, KeyCreatedDto, KeyDto, MeDto, OllamaModelInfo, SchemaDto, SeqTestResult, TenantSettingsDto, TestModelResult, WebhookDto } from './models';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -23,6 +23,25 @@ export class ApiService {
   getExtraction(id: string) {
     return this.http.get<ExtractionDto>(`${this.base}/v1/extractions/${id}`);
   }
+  rerunExtraction(id: string, body: { schemaId?: string; schema?: string; model?: string; async?: boolean }) {
+    return this.http.post<ExtractionDto>(`${this.base}/v1/extractions/${id}/rerun`, body);
+  }
+
+  exportJson(id: string) {
+    return this.http.get(`${this.base}/v1/extractions/${id}/export.json`, { responseType: 'blob' });
+  }
+
+  getOriginal(id: string) {
+    return this.http.get(`${this.base}/v1/extractions/${id}/original`, { responseType: 'blob' });
+  }
+
+  exportCsv(schemaId?: string, schemaName?: string) {
+    let q = '';
+    if (schemaId) q += `schemaId=${schemaId}&`;
+    if (schemaName) q += `schemaName=${encodeURIComponent(schemaName)}&`;
+    return this.http.get(`${this.base}/v1/extractions/export.csv?${q}`, { responseType: 'blob' });
+  }
+
   uploadExtraction(file: File, opts: { schemaId?: string; schema?: string; async?: boolean; webhookUrl?: string; model?: string }) {
     const fd = new FormData();
     fd.append('file', file);
@@ -59,8 +78,14 @@ export class ApiService {
   }
 
   getGlobal() { return this.http.get<GlobalSettingsDto>(`${this.base}/v1/admin/global/`); }
-  putGlobal(body: { seqEnabled: boolean; seqUrl: string | null; seqApiKey: string | null; clearSeqApiKey: boolean; seqMinimumLevel: string; applicationName: string }) {
+  putGlobal(body: { seqEnabled: boolean; seqUrl: string | null; seqApiKey: string | null; clearSeqApiKey: boolean; seqMinimumLevel: string; applicationName: string; allowedOrigins?: string[]; allowAnyOrigin?: boolean }) {
     return this.http.put<GlobalSettingsDto>(`${this.base}/v1/admin/global/`, body);
   }
   testSeq() { return this.http.post<SeqTestResult>(`${this.base}/v1/admin/global/seq/test`, {}); }
+
+  listAudit(page = 1, pageSize = 50, eventType?: string) {
+    let q = `page=${page}&pageSize=${pageSize}`;
+    if (eventType) q += `&eventType=${encodeURIComponent(eventType)}`;
+    return this.http.get<AuditPage>(`${this.base}/v1/admin/audit?${q}`);
+  }
 }

@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtesseract-dev \
     libgdiplus \
     libc6-dev \
+    libfontconfig1 \
+    libfreetype6 \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*

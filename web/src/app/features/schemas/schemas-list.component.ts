@@ -3,17 +3,18 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
 import { SchemaDto } from '../../core/models';
+import { MonacoComponent } from '../../core/monaco-editor.component';
 
 @Component({
   selector: 'app-schemas-list',
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, MonacoComponent],
   template: `
     <h1>Schemas</h1>
 
     <form (ngSubmit)="create()" class="create">
       <input [(ngModel)]="name" name="name" placeholder="Nombre del schema" required />
       <input [(ngModel)]="description" name="description" placeholder="Descripción" />
-      <textarea [(ngModel)]="jsonSchema" name="jsonSchema" rows="8" placeholder='{"type":"object","properties":{"invoice_number":{"type":"string"}},"required":["invoice_number"]}' required></textarea>
+      <app-monaco [value]="jsonSchema()" (valueChange)="jsonSchema.set($event)" language="json" height="320px"></app-monaco>
       <button type="submit" [disabled]="!name() || !jsonSchema()">Crear versión</button>
       @if (error()) { <p class="err">{{ error() }}</p> }
     </form>

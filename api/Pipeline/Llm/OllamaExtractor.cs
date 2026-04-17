@@ -86,7 +86,7 @@ public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogg
                 return new LlmExtractionResult(lastJson, true, null, tokensIn, tokensOut, model);
 
             lastError = string.Join("; ", errors.Select(e => $"{e.Path}: {e.Kind}"));
-            log.LogWarning("LLM attempt {Attempt} schema invalid: {Err}", attempt, lastError);
+            log.LogWarning("LLM attempt {Attempt} schema invalid. errors={Err} model={Model}", attempt, lastError, model);
         }
 
         return new LlmExtractionResult(lastJson, false, lastError, tokensIn, tokensOut, model);

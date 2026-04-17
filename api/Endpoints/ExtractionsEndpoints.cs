@@ -50,6 +50,80 @@ public static class ExtractionsEndpoints
                 .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
             return e is null ? Results.NotFound() : Results.Ok(ToDto(e));
         });
+
+        g.MapPost("/{id:guid}/rerun", HandleRerun);
+    }
+
+    public record RerunRequest(Guid? SchemaId, string? Schema, string? Model, bool Async = false);
+
+    private static async Task<IResult> HandleRerun(
+        Guid id,
+        RerunRequest req,
+        HttpContext ctx,
+        ScribaiDbContext db,
+        IBlobStore blobs,
+        IJobQueue queue,
+        ExtractionService service,
+        IOptions<ProcessingOptions> procOpt,
+        CancellationToken ct)
+    {
+        var t = ctx.Tenant();
+        var original = await db.Extractions.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
+        if (original is null) return Results.NotFound();
+        if (string.IsNullOrEmpty(original.StorageKey))
+            return Results.BadRequest(new { error = "original_not_stored", detail = "Re-run requires the original file to have been stored (store_originals=true on the API key used for upload)." });
+
+        var schemaJson = req.Schema;
+        Guid? schemaId = null;
+        if (req.SchemaId is Guid sid)
+        {
+            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId, ct);
+            if (schema is null) return Results.BadRequest(new { error = "schema_not_found" });
+            schemaJson = schema.JsonSchema;
+            schemaId = schema.Id;
+        }
+        if (string.IsNullOrWhiteSpace(schemaJson))
+        {
+            schemaJson = original.JsonSchemaSnapshot;
+            schemaId = original.SchemaId;
+        }
+
+        try { await JsonSchema.FromJsonAsync(schemaJson, ct); }
+        catch (Exception ex) { return Results.BadRequest(new { error = "invalid_json_schema", detail = ex.Message }); }
+
+        var model = string.IsNullOrWhiteSpace(req.Model) ? original.Model : req.Model;
+
+        var rerun = new Extraction
+        {
+            TenantId = t.TenantId,
+            ApiKeyId = t.ApiKeyId,
+            SchemaId = schemaId,
+            JsonSchemaSnapshot = schemaJson,
+            SourceFilename = original.SourceFilename,
+            Mime = original.Mime,
+            SizeBytes = original.SizeBytes,
+            StorageKey = original.StorageKey,
+            Status = ExtractionStatus.Queued,
+            Model = model
+        };
+        db.Extractions.Add(rerun);
+        await db.SaveChangesAsync(ct);
+
+        var proc = procOpt.Value;
+        var shouldAsync = req.Async || rerun.SizeBytes > proc.SyncMaxBytes;
+
+        if (shouldAsync)
+        {
+            await queue.EnqueueAsync(new ExtractionJob(rerun.Id, t.TenantId), ct);
+            return Results.Accepted($"/v1/extractions/{rerun.Id}", ToDto(rerun));
+        }
+
+        await using var content = await blobs.GetAsync(original.StorageKey, ct);
+        var processed = await service.ProcessAsync(rerun, content, storeOriginal: false, model, ct);
+        return processed.Status == ExtractionStatus.Succeeded
+            ? Results.Ok(ToDto(processed))
+            : Results.Json(ToDto(processed), statusCode: 422);
     }
 
     private static async Task<IResult> HandleCreate(

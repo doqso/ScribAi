@@ -3,6 +3,7 @@ using NJsonSchema;
 using ScribAi.Api.Auth;
 using ScribAi.Api.Data;
 using ScribAi.Api.Data.Entities;
+using ScribAi.Api.Services;
 
 namespace ScribAi.Api.Endpoints;
 
@@ -48,7 +49,7 @@ public static class SchemasEndpoints
                 : Results.Ok(new SchemaDto(s.Id, s.Name, s.Version, s.JsonSchema, s.Description, s.CreatedAt));
         });
 
-        g.MapPost("/", async (SchemaCreateRequest req, HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
+        g.MapPost("/", async (SchemaCreateRequest req, HttpContext ctx, ScribaiDbContext db, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             if (string.IsNullOrWhiteSpace(req.Name)) return Results.BadRequest(new { error = "name_required" });
@@ -70,15 +71,18 @@ public static class SchemasEndpoints
             };
             db.Schemas.Add(entity);
             await db.SaveChangesAsync(ct);
+            await audit.LogAsync(ctx, "schema.created", target: entity.Id.ToString(),
+                details: new { entity.Name, entity.Version }, ct: ct);
             return Results.Created($"/v1/schemas/{entity.Id}", new SchemaDto(entity.Id, entity.Name, entity.Version, entity.JsonSchema, entity.Description, entity.CreatedAt));
         });
 
-        g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
+        g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             var deleted = await db.Schemas
                 .Where(s => s.Id == id && s.TenantId == t.TenantId)
                 .ExecuteDeleteAsync(ct);
+            if (deleted > 0) await audit.LogAsync(ctx, "schema.deleted", target: id.ToString(), ct: ct);
             return deleted > 0 ? Results.NoContent() : Results.NotFound();
         });
     }

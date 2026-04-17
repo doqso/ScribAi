@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ScribAi.Api.Auth;
 using ScribAi.Api.Data;
 using ScribAi.Api.Data.Entities;
+using ScribAi.Api.Services;
 
 namespace ScribAi.Api.Endpoints;
 
@@ -28,7 +29,7 @@ public static class KeysEndpoints
             return Results.Ok(list);
         });
 
-        g.MapPost("/", async (KeyCreateRequest req, HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
+        g.MapPost("/", async (KeyCreateRequest req, HttpContext ctx, ScribaiDbContext db, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             if (!t.IsAdmin) return Results.Forbid();
@@ -46,11 +47,13 @@ public static class KeysEndpoints
             };
             db.ApiKeys.Add(key);
             await db.SaveChangesAsync(ct);
+            await audit.LogAsync(ctx, "api_key.created", target: key.Id.ToString(),
+                details: new { key.Label, key.IsAdmin, key.StoreOriginals, key.DefaultModel }, ct: ct);
             return Results.Created($"/v1/keys/{key.Id}",
                 new KeyCreatedDto(key.Id, key.Label, plain, key.KeyPrefix, key.IsAdmin, key.StoreOriginals, key.DefaultModel));
         });
 
-        g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
+        g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             if (!t.IsAdmin) return Results.Forbid();
@@ -59,6 +62,7 @@ public static class KeysEndpoints
             var updated = await db.ApiKeys
                 .Where(k => k.Id == id && k.TenantId == t.TenantId && k.RevokedAt == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(k => k.RevokedAt, DateTimeOffset.UtcNow), ct);
+            if (updated > 0) await audit.LogAsync(ctx, "api_key.revoked", target: id.ToString(), ct: ct);
             return updated > 0 ? Results.NoContent() : Results.NotFound();
         });
     }

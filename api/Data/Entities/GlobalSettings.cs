@@ -8,6 +8,8 @@ public class GlobalSettings
     public byte[]? SeqApiKeyEncrypted { get; set; }
     public string SeqMinimumLevel { get; set; } = "Information";
     public string ApplicationName { get; set; } = "ScribAi";
+    public string[] AllowedOrigins { get; set; } = [];
+    public bool AllowAnyOrigin { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public Guid? UpdatedBy { get; set; }
 }

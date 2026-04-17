@@ -16,6 +16,7 @@ import { ApiService } from '../../core/api.service';
         <a routerLink="/keys" routerLinkActive="active">API Keys</a>
         @if (isAdmin()) {
           <a routerLink="/settings" routerLinkActive="active">Configuración</a>
+          <a routerLink="/audit" routerLinkActive="active">Audit log</a>
         }
       </nav>
       <button class="logout" (click)="logout()">Cerrar sesión</button>

@@ -69,6 +69,26 @@ import { GlobalSettingsDto, OllamaModelInfo, TenantSettingsDto } from '../../cor
     </section>
 
     <section class="card">
+      <h2>Global — CORS</h2>
+      @if (globalCfg(); as g) {
+        <div class="grid">
+          <label class="row">
+            <input type="checkbox" [(ngModel)]="allowAny" name="aao" />
+            Permitir cualquier origen (no recomendado en producción)
+          </label>
+          <label>
+            Orígenes permitidos (uno por línea)
+            <textarea [(ngModel)]="originsText" name="ao" rows="4" placeholder="http://localhost:8090&#10;https://miapp.com"></textarea>
+          </label>
+        </div>
+        <div class="actions">
+          <button (click)="saveGlobal()" [disabled]="saving()">Guardar CORS + Seq</button>
+          @if (corsMsg()) { <span class="msg">{{ corsMsg() }}</span> }
+        </div>
+      }
+    </section>
+
+    <section class="card">
       <h2>Global — Seq (logging)</h2>
       @if (globalCfg(); as g) {
         <div class="grid">
@@ -159,8 +179,11 @@ export class SettingsComponent implements OnInit {
   seqKey = signal('');
   seqLevel = signal('Information');
   appName = signal('ScribAi');
+  allowAny = signal(false);
+  originsText = signal('');
   changingKey = signal(false);
   clearKey = signal(false);
+  corsMsg = signal<string | null>(null);
 
   saving = signal(false);
   testing = signal(false);
@@ -191,6 +214,8 @@ export class SettingsComponent implements OnInit {
       this.seqUrl.set(g.seqUrl ?? '');
       this.seqLevel.set(g.seqMinimumLevel);
       this.appName.set(g.applicationName ?? 'ScribAi');
+      this.allowAny.set(g.allowAnyOrigin);
+      this.originsText.set((g.allowedOrigins ?? []).join('\n'));
     });
   }
 
@@ -226,13 +251,16 @@ export class SettingsComponent implements OnInit {
   saveGlobal() {
     this.saving.set(true);
     this.globalMsg.set(null);
+    const origins = this.originsText().split('\n').map(s => s.trim()).filter(s => s.length > 0);
     this.api.putGlobal({
       seqEnabled: this.seqEnabled(),
       seqUrl: this.seqUrl() || null,
       seqApiKey: this.seqKey() || null,
       clearSeqApiKey: this.clearKey(),
       seqMinimumLevel: this.seqLevel(),
-      applicationName: this.appName() || 'ScribAi'
+      applicationName: this.appName() || 'ScribAi',
+      allowedOrigins: origins,
+      allowAnyOrigin: this.allowAny()
     }).subscribe({
       next: g => {
         this.globalCfg.set(g);
