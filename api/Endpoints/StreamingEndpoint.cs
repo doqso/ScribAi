@@ -71,7 +71,8 @@ public static class StreamingEndpoint
                 await WriteEvent("error", new { error = "invalid_schema_id" });
                 return;
             }
-            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId, ct);
+            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId
+                && (s.ApiKeyId == null || s.ApiKeyId == t.ApiKeyId), ct);
             if (schema is null)
             {
                 await WriteEvent("error", new { error = "schema_not_found" });

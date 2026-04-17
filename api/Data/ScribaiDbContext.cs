@@ -40,7 +40,7 @@ public class ScribaiDbContext(DbContextOptions<ScribaiDbContext> options) : DbCo
         {
             e.ToTable("schemas");
             e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.TenantId, x.Name, x.Version }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.ApiKeyId, x.Name, x.Version }).IsUnique();
             e.Property(x => x.Name).HasMaxLength(200).IsRequired();
             e.Property(x => x.JsonSchema).HasColumnType("jsonb").IsRequired();
             e.HasOne(x => x.Tenant).WithMany(t => t.Schemas).HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);

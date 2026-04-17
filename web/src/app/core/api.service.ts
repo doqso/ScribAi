@@ -13,6 +13,9 @@ export class ApiService {
   createSchema(body: { name: string; jsonSchema: string; description?: string }) {
     return this.http.post<SchemaDto>(`${this.base}/v1/schemas/`, body);
   }
+  updateSchema(id: string, body: { jsonSchema: string; description?: string }) {
+    return this.http.put<SchemaDto>(`${this.base}/v1/schemas/${id}`, body);
+  }
   deleteSchema(id: string) { return this.http.delete(`${this.base}/v1/schemas/${id}`); }
 
   listExtractions(page = 1, pageSize = 20, status?: string) {

@@ -82,7 +82,8 @@ public static class ExtractionsEndpoints
         Guid? schemaId = null;
         if (req.SchemaId is Guid sid)
         {
-            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId, ct);
+            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId
+                && (s.ApiKeyId == null || s.ApiKeyId == t.ApiKeyId), ct);
             if (schema is null) return Results.BadRequest(new { error = "schema_not_found" });
             schemaJson = schema.JsonSchema;
             schemaId = schema.Id;
@@ -157,7 +158,8 @@ public static class ExtractionsEndpoints
         if (!string.IsNullOrEmpty(schemaIdStr))
         {
             if (!Guid.TryParse(schemaIdStr, out var sid)) return Results.BadRequest(new { error = "invalid_schema_id" });
-            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId, ct);
+            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId
+                && (s.ApiKeyId == null || s.ApiKeyId == t.ApiKeyId), ct);
             if (schema is null) return Results.BadRequest(new { error = "schema_not_found" });
             schemaJson = schema.JsonSchema;
             schemaId = schema.Id;

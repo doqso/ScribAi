@@ -173,9 +173,10 @@ GET    /v1/extractions/{id}/export.json
 GET    /v1/extractions/export.csv?schemaId=X
 
 # Schemas (versionados)
-POST   /v1/schemas                       # { name, jsonSchema, description? }
-GET    /v1/schemas
-GET    /v1/schemas/by-name/{name}/latest
+POST   /v1/schemas                       # { name, jsonSchema, description? } — admin crea global, no-admin crea personal
+PUT    /v1/schemas/{id}                  # { jsonSchema, description? } — sobrescribe in-place (mismas reglas de scope)
+GET    /v1/schemas                       # incluye scope="global"|"personal" por fila
+GET    /v1/schemas/by-name/{name}/latest # personal propia si existe, si no global
 DELETE /v1/schemas/{id}
 
 # Webhooks
@@ -274,7 +275,7 @@ Puertos configurables vía `.env`: `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `RED
 | Recurso | Admin (tenant) | No-admin (solo su key) |
 |---|---|---|
 | Extractions | todas del tenant | solo las subidas con su key |
-| Schemas | compartidos | compartidos |
+| Schemas | ve + edita todo (globales + personales de cualquiera) | ve globales (read-only) + personales propios (editables) |
 | Webhooks | todos del tenant | solo los propios; dispatcher solo dispara los del ApiKeyId de la extracción |
 | API Keys CRUD | sí | — |
 | Settings / Audit / Global config | sí | — |

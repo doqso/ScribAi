@@ -4,7 +4,10 @@ export interface SchemaDto {
   version: number;
   jsonSchema: string;
   description?: string;
+  apiKeyId?: string | null;
+  scope: 'global' | 'personal';
   createdAt: string;
+  updatedAt?: string | null;
 }
 
 export interface ExtractionDto {
