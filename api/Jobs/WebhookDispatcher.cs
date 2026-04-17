@@ -24,7 +24,8 @@ public class WebhookDispatcher(
         var evt = ext.Status == ExtractionStatus.Succeeded ? "extraction.succeeded" : "extraction.failed";
 
         var hooks = await db.Webhooks
-            .Where(w => w.TenantId == ext.TenantId && w.Active && w.Events.Contains(evt))
+            .Where(w => w.TenantId == ext.TenantId && w.Active && w.Events.Contains(evt)
+                        && (w.ApiKeyId == null || w.ApiKeyId == ext.ApiKeyId))
             .ToListAsync(ct);
 
         if (!string.IsNullOrWhiteSpace(ext.WebhookUrl))

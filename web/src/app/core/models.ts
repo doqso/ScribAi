@@ -38,6 +38,7 @@ export interface WebhookDto {
   events: string[];
   active: boolean;
   secret?: string;
+  apiKeyId?: string | null;
   createdAt: string;
 }
 

@@ -11,7 +11,7 @@ namespace ScribAi.Api.Endpoints;
 public static class WebhooksEndpoints
 {
     public record WebhookCreateRequest(string Url, string[]? Events);
-    public record WebhookDto(Guid Id, string Url, string[] Events, bool Active, string? Secret, DateTimeOffset CreatedAt);
+    public record WebhookDto(Guid Id, string Url, string[] Events, bool Active, string? Secret, Guid? ApiKeyId, DateTimeOffset CreatedAt);
 
     public static void MapWebhooks(this IEndpointRouteBuilder app)
     {
@@ -20,10 +20,10 @@ public static class WebhooksEndpoints
         g.MapGet("/", async (HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
-            var list = await db.Webhooks
-                .AsNoTracking()
-                .Where(w => w.TenantId == t.TenantId)
-                .Select(w => new WebhookDto(w.Id, w.Url, w.Events, w.Active, null, w.CreatedAt))
+            var q = db.Webhooks.AsNoTracking().Where(w => w.TenantId == t.TenantId);
+            if (!t.IsAdmin) q = q.Where(w => w.ApiKeyId == t.ApiKeyId);
+            var list = await q
+                .Select(w => new WebhookDto(w.Id, w.Url, w.Events, w.Active, null, w.ApiKeyId, w.CreatedAt))
                 .ToListAsync(ct);
             return Results.Ok(list);
         });
@@ -38,6 +38,7 @@ public static class WebhooksEndpoints
             var hook = new Webhook
             {
                 TenantId = t.TenantId,
+                ApiKeyId = t.ApiKeyId,
                 Url = req.Url,
                 Secret = secret,
                 Events = req.Events is { Length: > 0 } ? req.Events : ["extraction.succeeded", "extraction.failed"],
@@ -48,15 +49,15 @@ public static class WebhooksEndpoints
             await audit.LogAsync(ctx, "webhook.created", target: hook.Id.ToString(),
                 details: new { hook.Url, hook.Events }, ct: ct);
             return Results.Created($"/v1/webhooks/{hook.Id}",
-                new WebhookDto(hook.Id, hook.Url, hook.Events, hook.Active, hook.Secret, hook.CreatedAt));
+                new WebhookDto(hook.Id, hook.Url, hook.Events, hook.Active, hook.Secret, hook.ApiKeyId, hook.CreatedAt));
         });
 
         g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, IAuditLogger audit, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
-            var deleted = await db.Webhooks
-                .Where(w => w.Id == id && w.TenantId == t.TenantId)
-                .ExecuteDeleteAsync(ct);
+            var q = db.Webhooks.Where(w => w.Id == id && w.TenantId == t.TenantId);
+            if (!t.IsAdmin) q = q.Where(w => w.ApiKeyId == t.ApiKeyId);
+            var deleted = await q.ExecuteDeleteAsync(ct);
             if (deleted > 0) await audit.LogAsync(ctx, "webhook.deleted", target: id.ToString(), ct: ct);
             return deleted > 0 ? Results.NoContent() : Results.NotFound();
         });
@@ -66,11 +67,13 @@ public static class WebhooksEndpoints
             var t = ctx.Tenant();
             var hook = await db.Webhooks.FirstOrDefaultAsync(w => w.Id == id && w.TenantId == t.TenantId, ct);
             if (hook is null) return Results.NotFound();
+            if (!t.IsAdmin && hook.ApiKeyId != t.ApiKeyId) return Results.NotFound();
 
             var fake = new Extraction
             {
                 Id = Guid.NewGuid(),
                 TenantId = t.TenantId,
+                ApiKeyId = t.ApiKeyId,
                 Status = ExtractionStatus.Succeeded,
                 SourceFilename = "test.pdf",
                 Mime = "application/pdf",

@@ -275,7 +275,7 @@ Puertos configurables vía `.env`: `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `RED
 |---|---|---|
 | Extractions | todas del tenant | solo las subidas con su key |
 | Schemas | compartidos | compartidos |
-| Webhooks | compartidos | compartidos |
+| Webhooks | todos del tenant | solo los propios; dispatcher solo dispara los del ApiKeyId de la extracción |
 | API Keys CRUD | sí | — |
 | Settings / Audit / Global config | sí | — |
 
