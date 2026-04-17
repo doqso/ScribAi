@@ -1,0 +1,141 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using NJsonSchema;
+using ScribAi.Api.Auth;
+using ScribAi.Api.Data;
+using ScribAi.Api.Data.Entities;
+using ScribAi.Api.Jobs;
+using ScribAi.Api.Options;
+using ScribAi.Api.Services;
+using ScribAi.Api.Storage;
+
+namespace ScribAi.Api.Endpoints;
+
+public static class ExtractionsEndpoints
+{
+    public record ExtractionDto(Guid Id, string Status, string SourceFilename, string Mime, long SizeBytes,
+        string? Result, string? Error, string Model, string ExtractionMethod,
+        int? TokensIn, int? TokensOut, DateTimeOffset CreatedAt, DateTimeOffset? StartedAt, DateTimeOffset? FinishedAt);
+
+    public static void MapExtractions(this IEndpointRouteBuilder app)
+    {
+        var g = app.MapGroup("/v1/extractions").WithTags("Extractions");
+
+        g.MapPost("/", HandleCreate).DisableAntiforgery();
+
+        g.MapGet("/", async (HttpContext ctx, ScribaiDbContext db, string? status, int page, int pageSize, CancellationToken ct) =>
+        {
+            var t = ctx.Tenant();
+            page = page <= 0 ? 1 : page;
+            pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+            var query = db.Extractions.AsNoTracking().Where(e => e.TenantId == t.TenantId);
+            if (!string.IsNullOrEmpty(status) && Enum.TryParse<ExtractionStatus>(status, true, out var st))
+                query = query.Where(e => e.Status == st);
+
+            var total = await query.CountAsync(ct);
+            var items = await query
+                .OrderByDescending(e => e.CreatedAt)
+                .Skip((page - 1) * pageSize).Take(pageSize)
+                .Select(e => ToDto(e))
+                .ToListAsync(ct);
+
+            return Results.Ok(new { total, page, pageSize, items });
+        });
+
+        g.MapGet("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, CancellationToken ct) =>
+        {
+            var t = ctx.Tenant();
+            var e = await db.Extractions.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
+            return e is null ? Results.NotFound() : Results.Ok(ToDto(e));
+        });
+    }
+
+    private static async Task<IResult> HandleCreate(
+        HttpContext ctx,
+        ScribaiDbContext db,
+        IBlobStore blobs,
+        IJobQueue queue,
+        ExtractionService service,
+        IOptions<ProcessingOptions> procOpt,
+        CancellationToken ct)
+    {
+        if (!ctx.Request.HasFormContentType) return Results.BadRequest(new { error = "expected_multipart" });
+        var form = await ctx.Request.ReadFormAsync(ct);
+        var file = form.Files.GetFile("file");
+        if (file is null || file.Length == 0) return Results.BadRequest(new { error = "file_required" });
+
+        var t = ctx.Tenant();
+        var proc = procOpt.Value;
+        if (file.Length > proc.MaxUploadBytes)
+            return Results.BadRequest(new { error = "file_too_large", maxBytes = proc.MaxUploadBytes });
+
+        var schemaJson = form["schema"].ToString();
+        var schemaIdStr = form["schemaId"].ToString();
+        Guid? schemaId = null;
+
+        if (!string.IsNullOrEmpty(schemaIdStr))
+        {
+            if (!Guid.TryParse(schemaIdStr, out var sid)) return Results.BadRequest(new { error = "invalid_schema_id" });
+            var schema = await db.Schemas.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sid && s.TenantId == t.TenantId, ct);
+            if (schema is null) return Results.BadRequest(new { error = "schema_not_found" });
+            schemaJson = schema.JsonSchema;
+            schemaId = schema.Id;
+        }
+
+        if (string.IsNullOrWhiteSpace(schemaJson))
+            return Results.BadRequest(new { error = "schema_required" });
+
+        try { await JsonSchema.FromJsonAsync(schemaJson, ct); }
+        catch (Exception ex) { return Results.BadRequest(new { error = "invalid_json_schema", detail = ex.Message }); }
+
+        var forceAsync = form["async"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase);
+        var webhookUrl = form["webhookUrl"].ToString();
+        var model = form["model"].ToString();
+        if (string.IsNullOrWhiteSpace(model)) model = t.DefaultModel;
+
+        var shouldAsync = forceAsync || file.Length > proc.SyncMaxBytes;
+
+        var extraction = new Extraction
+        {
+            TenantId = t.TenantId,
+            ApiKeyId = t.ApiKeyId,
+            SchemaId = schemaId,
+            JsonSchemaSnapshot = schemaJson,
+            SourceFilename = file.FileName,
+            Mime = file.ContentType ?? "application/octet-stream",
+            SizeBytes = file.Length,
+            Status = ExtractionStatus.Queued,
+            Model = model,
+            WebhookUrl = string.IsNullOrWhiteSpace(webhookUrl) ? null : webhookUrl
+        };
+
+        db.Extractions.Add(extraction);
+        await db.SaveChangesAsync(ct);
+
+        await using var upload = file.OpenReadStream();
+        using var buffer = new MemoryStream();
+        await upload.CopyToAsync(buffer, ct);
+        buffer.Position = 0;
+
+        if (shouldAsync)
+        {
+            extraction.StorageKey = await blobs.PutAsync(buffer, file.FileName, extraction.Mime, ct);
+            await db.SaveChangesAsync(ct);
+            await queue.EnqueueAsync(new ExtractionJob(extraction.Id, t.TenantId), ct);
+            return Results.Accepted($"/v1/extractions/{extraction.Id}", ToDto(extraction));
+        }
+
+        buffer.Position = 0;
+        var processed = await service.ProcessAsync(extraction, buffer, t.StoreOriginals, model, ct);
+        return processed.Status == ExtractionStatus.Succeeded
+            ? Results.Ok(ToDto(processed))
+            : Results.Json(ToDto(processed), statusCode: 422);
+    }
+
+    private static ExtractionDto ToDto(Extraction e) => new(
+        e.Id, e.Status.ToString().ToLowerInvariant(), e.SourceFilename, e.Mime, e.SizeBytes,
+        e.Result, e.Error, e.Model, e.ExtractionMethod, e.TokensIn, e.TokensOut,
+        e.CreatedAt, e.StartedAt, e.FinishedAt);
+}

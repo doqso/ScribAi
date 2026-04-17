@@ -1,0 +1,28 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+node_modules/
+dist/
+.angular/
+.DS_Store
+.env
+web/dist/
+
+# OS
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+
+# Env
+.env
+
+# Tests
+TestResults/
+coverage/
+
+# Angular
+.angular/cache/
