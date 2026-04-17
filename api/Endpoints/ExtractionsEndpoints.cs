@@ -55,6 +55,28 @@ public static class ExtractionsEndpoints
         });
 
         g.MapPost("/{id:guid}/rerun", HandleRerun);
+
+        g.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, ScribaiDbContext db, IBlobStore blobs, IAuditLogger audit, ILogger<Program> log, CancellationToken ct) =>
+        {
+            var t = ctx.Tenant();
+            var e = await db.Extractions.FirstOrDefaultAsync(x => x.Id == id && x.TenantId == t.TenantId, ct);
+            if (e is null) return Results.NotFound();
+            if (!t.IsAdmin && e.ApiKeyId != t.ApiKeyId) return Results.NotFound();
+
+            var storageKey = e.StorageKey;
+            db.Extractions.Remove(e);
+            await db.SaveChangesAsync(ct);
+
+            if (!string.IsNullOrEmpty(storageKey))
+            {
+                try { await blobs.DeleteAsync(storageKey, ct); }
+                catch (Exception ex) { log.LogWarning(ex, "Failed to delete blob {Key} for extraction {Id}", storageKey, id); }
+            }
+
+            await audit.LogAsync(ctx, "extraction.deleted", target: id.ToString(),
+                details: new { e.SourceFilename, storageKey }, ct: ct);
+            return Results.NoContent();
+        });
     }
 
     public record RerunRequest(Guid? SchemaId, string? Schema, string? Model, bool Async = false);

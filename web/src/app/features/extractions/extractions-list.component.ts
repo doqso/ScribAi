@@ -46,7 +46,10 @@ import { ExtractionDto, SchemaDto } from '../../core/models';
               <td>{{ e.extractionMethod }}</td>
               <td>{{ e.model }}</td>
               <td>{{ e.createdAt | date:'short' }}</td>
-              <td><a [routerLink]="['/extractions', e.id]">Ver</a></td>
+              <td class="row-actions">
+                <a [routerLink]="['/extractions', e.id]">Ver</a>
+                <button class="danger" (click)="remove(e.id)">Borrar</button>
+              </td>
             </tr>
           }
           @empty { <tr><td colspan="6">Sin resultados</td></tr> }
@@ -76,6 +79,8 @@ import { ExtractionDto, SchemaDto } from '../../core/models';
     .pager button { background:#1c1c1c; color:#eee; border:1px solid #333; padding:0.4rem 0.8rem; border-radius:4px; cursor:pointer; }
     .pager button:disabled { opacity:0.4; cursor:not-allowed; }
     a { color:#60a5fa; }
+    .row-actions { display:flex; gap:0.5rem; align-items:center; }
+    .row-actions button.danger { background:#b91c1c; color:#fff; border:none; padding:0.3rem 0.6rem; border-radius:4px; cursor:pointer; font-size:0.8rem; }
   `]
 })
 export class ExtractionsListComponent implements OnInit {
@@ -92,6 +97,14 @@ export class ExtractionsListComponent implements OnInit {
   ngOnInit() {
     this.load();
     this.api.listSchemas().subscribe(s => this.schemas.set(s));
+  }
+
+  remove(id: string) {
+    if (!confirm('¿Borrar esta extracción? También se elimina el archivo original del storage.')) return;
+    this.api.deleteExtraction(id).subscribe({
+      next: () => this.load(),
+      error: err => alert('Error borrando: ' + (err.error?.error ?? err.message))
+    });
   }
 
   exportCsv() {

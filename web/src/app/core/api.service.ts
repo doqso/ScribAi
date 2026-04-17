@@ -30,6 +30,10 @@ export class ApiService {
     return this.http.post<ExtractionDto>(`${this.base}/v1/extractions/${id}/rerun`, body);
   }
 
+  deleteExtraction(id: string) {
+    return this.http.delete(`${this.base}/v1/extractions/${id}`);
+  }
+
   exportJson(id: string) {
     return this.http.get(`${this.base}/v1/extractions/${id}/export.json`, { responseType: 'blob' });
   }

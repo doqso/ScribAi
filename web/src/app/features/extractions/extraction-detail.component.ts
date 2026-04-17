@@ -27,6 +27,7 @@ import { MonacoComponent } from '../../core/monaco-editor.component';
       <div class="actions">
         <button (click)="showRerun.set(!showRerun())">Re-extraer</button>
         <button class="ghost" (click)="downloadJson(e)" [disabled]="!e.result">Descargar JSON</button>
+        <button class="danger" (click)="remove(e.id)">Borrar</button>
       </div>
 
       @if (showRerun()) {
@@ -92,6 +93,7 @@ import { MonacoComponent } from '../../core/monaco-editor.component';
     .actions { display:flex; gap:0.5rem; margin:1rem 0; align-items:center; }
     button { background:#3b82f6; color:#fff; border:none; padding:0.5rem 0.9rem; border-radius:4px; cursor:pointer; }
     button.ghost { background:transparent; border:1px solid #333; color:#aaa; }
+    button.danger { background:#b91c1c; }
     .card { background:#161618; border:1px solid #2a2a2e; padding:1rem; border-radius:8px; margin-bottom:1rem; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:0.5rem 0; }
     label { display:flex; flex-direction:column; gap:0.3rem; font-size:0.85rem; color:#bbb; }
@@ -199,6 +201,14 @@ export class ExtractionDetailComponent implements OnInit, OnDestroy {
   pretty(json: string): string {
     try { return JSON.stringify(JSON.parse(json), null, 2); }
     catch { return json; }
+  }
+
+  remove(id: string) {
+    if (!confirm('¿Borrar esta extracción? También se elimina el archivo original del storage.')) return;
+    this.api.deleteExtraction(id).subscribe({
+      next: () => this.router.navigate(['/extractions']),
+      error: err => alert('Error borrando: ' + (err.error?.error ?? err.message))
+    });
   }
 
   downloadJson(e: ExtractionDto) {
