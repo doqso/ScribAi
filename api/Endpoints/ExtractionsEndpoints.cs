@@ -67,14 +67,24 @@ public static class ExtractionsEndpoints
             db.Extractions.Remove(e);
             await db.SaveChangesAsync(ct);
 
+            var blobDeleted = false;
             if (!string.IsNullOrEmpty(storageKey))
             {
-                try { await blobs.DeleteAsync(storageKey, ct); }
-                catch (Exception ex) { log.LogWarning(ex, "Failed to delete blob {Key} for extraction {Id}", storageKey, id); }
+                var stillReferenced = await db.Extractions
+                    .AnyAsync(x => x.StorageKey == storageKey, ct);
+                if (stillReferenced)
+                {
+                    log.LogInformation("Blob {Key} retained — referenced by other extractions", storageKey);
+                }
+                else
+                {
+                    try { await blobs.DeleteAsync(storageKey, ct); blobDeleted = true; }
+                    catch (Exception ex) { log.LogWarning(ex, "Failed to delete blob {Key} for extraction {Id}", storageKey, id); }
+                }
             }
 
             await audit.LogAsync(ctx, "extraction.deleted", target: id.ToString(),
-                details: new { e.SourceFilename, storageKey }, ct: ct);
+                details: new { e.SourceFilename, storageKey, blobDeleted }, ct: ct);
             return Results.NoContent();
         });
     }
