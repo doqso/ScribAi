@@ -13,8 +13,8 @@ import { ApiService } from '../../core/api.service';
         <a routerLink="/extractions" routerLinkActive="active">Extracciones</a>
         <a routerLink="/schemas" routerLinkActive="active">Schemas</a>
         <a routerLink="/webhooks" routerLinkActive="active">Webhooks</a>
-        <a routerLink="/keys" routerLinkActive="active">API Keys</a>
         @if (isAdmin()) {
+          <a routerLink="/keys" routerLinkActive="active">API Keys</a>
           <a routerLink="/settings" routerLinkActive="active">Configuración</a>
           <a routerLink="/audit" routerLinkActive="active">Audit log</a>
         }
