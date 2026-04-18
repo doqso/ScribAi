@@ -6,5 +6,6 @@ public record ResolvedTenantSettings(
     string VisionModel,
     int OllamaTimeoutSeconds,
     int WebhookMaxAttempts,
-    int WebhookTimeoutSeconds
+    int WebhookTimeoutSeconds,
+    bool? Think
 );

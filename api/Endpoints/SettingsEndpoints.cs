@@ -15,6 +15,7 @@ public static class SettingsEndpoints
         int? OllamaTimeoutSeconds,
         int? WebhookMaxAttempts,
         int? WebhookTimeoutSeconds,
+        bool? Think,
         ResolvedTenantSettings Effective
     );
 
@@ -24,11 +25,13 @@ public static class SettingsEndpoints
         int? OllamaTimeoutSeconds,
         int? WebhookMaxAttempts,
         int? WebhookTimeoutSeconds,
+        bool? Think,
         bool ClearDefaultTextModel = false,
         bool ClearVisionModel = false,
         bool ClearOllamaTimeoutSeconds = false,
         bool ClearWebhookMaxAttempts = false,
-        bool ClearWebhookTimeoutSeconds = false
+        bool ClearWebhookTimeoutSeconds = false,
+        bool ClearThink = false
     );
 
     public record ModelInfo(string Name, long? Size);
@@ -47,7 +50,7 @@ public static class SettingsEndpoints
             var eff = await svc.GetAsync(t.TenantId, ct);
             return Results.Ok(new SettingsDto(
                 raw.DefaultTextModel, raw.VisionModel, raw.OllamaTimeoutSeconds,
-                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, eff));
+                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, eff));
         });
 
         g.MapPut("/", async (SettingsUpdateRequest req, HttpContext ctx, ITenantSettingsService svc, IAuditLogger audit, CancellationToken ct) =>
@@ -71,6 +74,9 @@ public static class SettingsEndpoints
 
                 if (req.ClearWebhookTimeoutSeconds) s.WebhookTimeoutSeconds = null;
                 else if (req.WebhookTimeoutSeconds is int w2) s.WebhookTimeoutSeconds = Math.Clamp(w2, 1, 300);
+
+                if (req.ClearThink) s.Think = null;
+                else if (req.Think is bool th) s.Think = th;
             }, ct);
 
             var raw = await svc.GetRawAsync(t.TenantId, ct);
@@ -78,7 +84,7 @@ public static class SettingsEndpoints
             await audit.LogAsync(ctx, "tenant_settings.updated", target: t.TenantId.ToString(), details: req, ct: ct);
             return Results.Ok(new SettingsDto(
                 raw.DefaultTextModel, raw.VisionModel, raw.OllamaTimeoutSeconds,
-                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, eff));
+                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, eff));
         });
 
         g.MapGet("/models", async (HttpContext ctx, IHttpClientFactory http, CancellationToken ct) =>

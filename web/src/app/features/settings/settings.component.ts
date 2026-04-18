@@ -58,6 +58,15 @@ import { GlobalSettingsDto, OllamaModelInfo, TenantSettingsDto } from '../../cor
             Webhook timeout entrega (segundos)
             <input type="number" [(ngModel)]="webhookTimeout" name="wt" [placeholder]="'default: ' + s.effective.webhookTimeoutSeconds" min="1" max="300" />
           </label>
+
+          <label>
+            Thinking (modelos reasoning)
+            <select [(ngModel)]="think" name="th">
+              <option value="">Heredar default (no enviar)</option>
+              <option value="on">Forzar ON (think: true)</option>
+              <option value="off">Forzar OFF (think: false)</option>
+            </select>
+          </label>
         </div>
         <div class="actions">
           <button (click)="saveTenant()" [disabled]="saving()">Guardar cambios</button>
@@ -173,6 +182,7 @@ export class SettingsComponent implements OnInit {
   ollamaTimeout = signal<number | null>(null);
   webhookAttempts = signal<number | null>(null);
   webhookTimeout = signal<number | null>(null);
+  think = signal<'' | 'on' | 'off'>('');
 
   seqEnabled = signal(false);
   seqUrl = signal('');
@@ -203,6 +213,7 @@ export class SettingsComponent implements OnInit {
       this.ollamaTimeout.set(s.ollamaTimeoutSeconds);
       this.webhookAttempts.set(s.webhookMaxAttempts);
       this.webhookTimeout.set(s.webhookTimeoutSeconds);
+      this.think.set(s.think === true ? 'on' : s.think === false ? 'off' : '');
     });
     this.api.listModels().subscribe({
       next: m => this.models.set(m),
@@ -229,7 +240,7 @@ export class SettingsComponent implements OnInit {
   saveTenant() {
     this.saving.set(true);
     this.tenantMsg.set(null);
-    const tm = this.textModel(), vm = this.visionModel();
+    const tm = this.textModel(), vm = this.visionModel(), th = this.think();
     const body = {
       defaultTextModel: tm === '__custom__' ? this.textModelCustom() : (tm || null),
       clearDefaultTextModel: tm === '' || (tm === '__custom__' && !this.textModelCustom()),
@@ -241,6 +252,8 @@ export class SettingsComponent implements OnInit {
       clearWebhookMaxAttempts: this.webhookAttempts() === null,
       webhookTimeoutSeconds: this.webhookTimeout(),
       clearWebhookTimeoutSeconds: this.webhookTimeout() === null,
+      think: th === 'on' ? true : th === 'off' ? false : null,
+      clearThink: th === '',
     };
     this.api.putSettings(body).subscribe({
       next: s => { this.settings.set(s); this.tenantMsg.set('Guardado'); this.saving.set(false); },

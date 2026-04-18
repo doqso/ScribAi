@@ -22,6 +22,7 @@ public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogg
         string model,
         IReadOnlyList<byte[]>? images = null,
         TimeSpan? perRequestTimeout = null,
+        bool? think = null,
         CancellationToken ct = default)
     {
         model = string.IsNullOrWhiteSpace(model) ? _opt.DefaultModel : model;
@@ -60,6 +61,7 @@ public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogg
                     BuildUserMessage(userContent, images)
                 }
             };
+            if (think is bool t2) payload["think"] = t2;
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "/api/chat")
             {

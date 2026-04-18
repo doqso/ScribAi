@@ -10,5 +10,6 @@ public class TenantSettings
     public int? OllamaTimeoutSeconds { get; set; }
     public int? WebhookMaxAttempts { get; set; }
     public int? WebhookTimeoutSeconds { get; set; }
+    public bool? Think { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

@@ -76,6 +76,7 @@ export interface ResolvedTenantSettings {
   ollamaTimeoutSeconds: number;
   webhookMaxAttempts: number;
   webhookTimeoutSeconds: number;
+  think: boolean | null;
 }
 
 export interface TenantSettingsDto {
@@ -84,6 +85,7 @@ export interface TenantSettingsDto {
   ollamaTimeoutSeconds: number | null;
   webhookMaxAttempts: number | null;
   webhookTimeoutSeconds: number | null;
+  think: boolean | null;
   effective: ResolvedTenantSettings;
 }
 

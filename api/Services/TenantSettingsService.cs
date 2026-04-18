@@ -39,7 +39,8 @@ public class TenantSettingsService(
             VisionModel: row.VisionModel ?? o.VisionModel,
             OllamaTimeoutSeconds: row.OllamaTimeoutSeconds ?? o.TimeoutSeconds,
             WebhookMaxAttempts: row.WebhookMaxAttempts ?? p.WebhookMaxAttempts,
-            WebhookTimeoutSeconds: row.WebhookTimeoutSeconds ?? 15
+            WebhookTimeoutSeconds: row.WebhookTimeoutSeconds ?? 15,
+            Think: row.Think
         );
 
         cache.Set(Key(tenantId), resolved, CacheTtl);
