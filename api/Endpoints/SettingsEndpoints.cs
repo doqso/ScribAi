@@ -16,6 +16,7 @@ public static class SettingsEndpoints
         int? WebhookMaxAttempts,
         int? WebhookTimeoutSeconds,
         bool? Think,
+        bool? OcrEnabled,
         ResolvedTenantSettings Effective
     );
 
@@ -26,6 +27,7 @@ public static class SettingsEndpoints
         int? WebhookMaxAttempts,
         int? WebhookTimeoutSeconds,
         bool? Think,
+        bool? OcrEnabled,
         bool ClearDefaultTextModel = false,
         bool ClearVisionModel = false,
         bool ClearOllamaTimeoutSeconds = false,
@@ -50,7 +52,7 @@ public static class SettingsEndpoints
             var eff = await svc.GetAsync(t.TenantId, ct);
             return Results.Ok(new SettingsDto(
                 raw.DefaultTextModel, raw.VisionModel, raw.OllamaTimeoutSeconds,
-                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, eff));
+                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, raw.OcrEnabled, eff));
         });
 
         g.MapPut("/", async (SettingsUpdateRequest req, HttpContext ctx, ITenantSettingsService svc, IAuditLogger audit, CancellationToken ct) =>
@@ -77,6 +79,8 @@ public static class SettingsEndpoints
 
                 if (req.ClearThink) s.Think = null;
                 else if (req.Think is bool th) s.Think = th;
+
+                if (req.OcrEnabled is bool oe) s.OcrEnabled = oe;
             }, ct);
 
             var raw = await svc.GetRawAsync(t.TenantId, ct);
@@ -84,7 +88,7 @@ public static class SettingsEndpoints
             await audit.LogAsync(ctx, "tenant_settings.updated", target: t.TenantId.ToString(), details: req, ct: ct);
             return Results.Ok(new SettingsDto(
                 raw.DefaultTextModel, raw.VisionModel, raw.OllamaTimeoutSeconds,
-                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, eff));
+                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, raw.OcrEnabled, eff));
         });
 
         g.MapGet("/models", async (HttpContext ctx, IHttpClientFactory http, CancellationToken ct) =>

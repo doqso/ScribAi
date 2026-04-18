@@ -62,7 +62,7 @@ public class ExtractionService(
 
             progress?.Report(new ProgressEvent("extracting_text"));
             var swRouter = Stopwatch.StartNew();
-            var doc = await router.ExtractAsync(content, extraction.SourceFilename, extraction.Mime, ct);
+            var doc = await router.ExtractAsync(content, extraction.SourceFilename, extraction.Mime, settings.OcrEnabled, ct);
             extraction.ExtractionMethod = doc.Method.ToString();
             log.LogInformation("Text extracted. method={Method} chars={Chars} ocr_conf={Conf} duration_ms={Ms}",
                 doc.Method, doc.Text.Length, doc.Confidence, swRouter.ElapsedMilliseconds);

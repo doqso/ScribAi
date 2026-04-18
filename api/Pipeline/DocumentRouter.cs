@@ -10,7 +10,7 @@ public class DocumentRouter(
     PlainTextExtractor text,
     ILogger<DocumentRouter> log) : IDocumentRouter
 {
-    public async Task<ExtractedDocument> ExtractAsync(Stream content, string filename, string mime, CancellationToken ct)
+    public async Task<ExtractedDocument> ExtractAsync(Stream content, string filename, string mime, bool useOcr, CancellationToken ct)
     {
         if (!content.CanSeek)
         {
@@ -21,12 +21,12 @@ public class DocumentRouter(
         }
 
         mime = string.IsNullOrWhiteSpace(mime) ? DetectMime(content, filename) : mime;
-        log.LogInformation("Routing {File} as {Mime}", filename, mime);
+        log.LogInformation("Routing {File} as {Mime} use_ocr={UseOcr}", filename, mime, useOcr);
 
         return mime switch
         {
-            "application/pdf" => await pdf.ExtractAsync(content, ct),
-            var m when m.StartsWith("image/") => await image.ExtractAsync(content, ct),
+            "application/pdf" => await pdf.ExtractAsync(content, useOcr, ct),
+            var m when m.StartsWith("image/") => await image.ExtractAsync(content, useOcr, ct),
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 or "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 or "application/vnd.ms-excel"
