@@ -11,6 +11,5 @@ public class TenantSettings
     public int? WebhookMaxAttempts { get; set; }
     public int? WebhookTimeoutSeconds { get; set; }
     public bool? Think { get; set; }
-    public bool? OcrEnabled { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

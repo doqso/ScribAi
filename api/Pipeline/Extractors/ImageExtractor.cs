@@ -7,17 +7,11 @@ namespace ScribAi.Api.Pipeline.Extractors;
 
 public class ImageExtractor(ITesseractOcr ocr, ILogger<ImageExtractor> log)
 {
-    public async Task<ExtractedDocument> ExtractAsync(Stream content, bool useOcr, CancellationToken ct)
+    public async Task<ExtractedDocument> ExtractAsync(Stream content, CancellationToken ct)
     {
         using var ms = new MemoryStream();
         await content.CopyToAsync(ms, ct);
         var original = ms.ToArray();
-
-        if (!useOcr)
-        {
-            log.LogInformation("Image OCR disabled — forwarding to vision model");
-            return new ExtractedDocument(string.Empty, ExtractionMethod.Image, Confidence: 0.0, PageImages: [original]);
-        }
 
         var preprocessed = Preprocess(original);
         var result = ocr.Run(preprocessed);

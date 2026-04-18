@@ -1,9 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using ScribAi.Api.Data;
 using ScribAi.Api.Data.Entities;
 using ScribAi.Api.Jobs;
-using ScribAi.Api.Options;
 using ScribAi.Api.Pipeline;
 using ScribAi.Api.Pipeline.Llm;
 using ScribAi.Api.Storage;
@@ -19,7 +17,6 @@ public class ExtractionService(
     IBlobStore blobs,
     WebhookDispatcher webhooks,
     ITenantSettingsService tenantSettings,
-    IOptions<ProcessingOptions> procOpt,
     ILogger<ExtractionService> log)
 {
     public record ProgressEvent(string Step, string? Detail = null, long? ElapsedMs = null);
@@ -62,13 +59,12 @@ public class ExtractionService(
 
             progress?.Report(new ProgressEvent("extracting_text"));
             var swRouter = Stopwatch.StartNew();
-            var doc = await router.ExtractAsync(content, extraction.SourceFilename, extraction.Mime, settings.OcrEnabled, ct);
+            var doc = await router.ExtractAsync(content, extraction.SourceFilename, extraction.Mime, ct);
             extraction.ExtractionMethod = doc.Method.ToString();
             log.LogInformation("Text extracted. method={Method} chars={Chars} ocr_conf={Conf} duration_ms={Ms}",
                 doc.Method, doc.Text.Length, doc.Confidence, swRouter.ElapsedMilliseconds);
 
-            var useVision = (doc.Method == ExtractionMethod.PdfOcr) ||
-                            (doc.Confidence is { } c && c < procOpt.Value.OcrConfidenceThreshold);
+            var useVision = doc.PageImages is { Count: > 0 };
 
             LlmExtractionResult result;
             var swLlm = Stopwatch.StartNew();

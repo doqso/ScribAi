@@ -13,7 +13,7 @@ public class PdfExtractor(ITesseractOcr ocr, IOptions<ProcessingOptions> opt, IL
     private const int Dpi = 200;
     private const int MaxPagesForOcr = 20;
 
-    public async Task<ExtractedDocument> ExtractAsync(Stream content, bool useOcr, CancellationToken ct)
+    public async Task<ExtractedDocument> ExtractAsync(Stream content, CancellationToken ct)
     {
         using var ms = new MemoryStream();
         await content.CopyToAsync(ms, ct);
@@ -61,18 +61,11 @@ public class PdfExtractor(ITesseractOcr ocr, IOptions<ProcessingOptions> opt, IL
                 var bytes = skData.ToArray();
                 pageImages.Add(bytes);
 
-                if (useOcr)
-                {
-                    var oc = ocr.Run(bytes);
-                    texts.AppendLine($"--- Page {++idx} ---");
-                    texts.AppendLine(oc.Text);
-                    confidences.Add(oc.Confidence);
-                    log.LogDebug("PDF page {Page} OCR conf={Conf} chars={Chars}", idx, oc.Confidence, oc.Text.Length);
-                }
-                else
-                {
-                    idx++;
-                }
+                var oc = ocr.Run(bytes);
+                texts.AppendLine($"--- Page {++idx} ---");
+                texts.AppendLine(oc.Text);
+                confidences.Add(oc.Confidence);
+                log.LogDebug("PDF page {Page} OCR conf={Conf} chars={Chars}", idx, oc.Confidence, oc.Text.Length);
 
                 if (idx >= MaxPagesForOcr) break;
             }
@@ -86,6 +79,6 @@ public class PdfExtractor(ITesseractOcr ocr, IOptions<ProcessingOptions> opt, IL
         }
 
         var minConf = confidences.Count > 0 ? confidences.Min() : 0.0;
-        return new ExtractedDocument(texts.ToString(), ExtractionMethod.PdfOcr, Confidence: useOcr ? minConf : 0.0, PageImages: pageImages);
+        return new ExtractedDocument(texts.ToString(), ExtractionMethod.PdfOcr, Confidence: minConf, PageImages: pageImages);
     }
 }

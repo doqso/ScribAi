@@ -252,7 +252,6 @@ Respuesta:
 | `Processing__SyncMaxBytes` | `2097152` | A partir de aquí, async obligatorio |
 | `Processing__MaxUploadBytes` | `52428800` | Límite duro de upload |
 | `Processing__TesseractLangs` | `spa+eng` | Idiomas OCR |
-| `Processing__OcrConfidenceThreshold` | `0.6` | Por debajo → fallback vision |
 | `Processing__WebhookMaxAttempts` | `5` | Reintentos webhook (override por tenant) |
 
 Puertos configurables vía `.env`: `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`.

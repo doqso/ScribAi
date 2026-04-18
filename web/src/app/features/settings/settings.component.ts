@@ -68,10 +68,6 @@ import { GlobalSettingsDto, OllamaModelInfo, TenantSettingsDto } from '../../cor
             </select>
           </label>
 
-          <label class="row">
-            <input type="checkbox" [(ngModel)]="ocrEnabled" name="ocr" />
-            Activar OCR (Tesseract). Si desactivado, PDFs escaneados e imágenes van directos al modelo visión.
-          </label>
         </div>
         <div class="actions">
           <button (click)="saveTenant()" [disabled]="saving()">Guardar cambios</button>
@@ -188,7 +184,6 @@ export class SettingsComponent implements OnInit {
   webhookAttempts = signal<number | null>(null);
   webhookTimeout = signal<number | null>(null);
   think = signal<'' | 'on' | 'off'>('');
-  ocrEnabled = signal(true);
 
   seqEnabled = signal(false);
   seqUrl = signal('');
@@ -220,7 +215,6 @@ export class SettingsComponent implements OnInit {
       this.webhookAttempts.set(s.webhookMaxAttempts);
       this.webhookTimeout.set(s.webhookTimeoutSeconds);
       this.think.set(s.think === true ? 'on' : s.think === false ? 'off' : '');
-      this.ocrEnabled.set(s.ocrEnabled ?? true);
     });
     this.api.listModels().subscribe({
       next: m => this.models.set(m),
@@ -261,7 +255,6 @@ export class SettingsComponent implements OnInit {
       clearWebhookTimeoutSeconds: this.webhookTimeout() === null,
       think: th === 'on' ? true : th === 'off' ? false : null,
       clearThink: th === '',
-      ocrEnabled: this.ocrEnabled(),
     };
     this.api.putSettings(body).subscribe({
       next: s => { this.settings.set(s); this.tenantMsg.set('Guardado'); this.saving.set(false); },

@@ -77,7 +77,6 @@ export interface ResolvedTenantSettings {
   webhookMaxAttempts: number;
   webhookTimeoutSeconds: number;
   think: boolean | null;
-  ocrEnabled: boolean;
 }
 
 export interface TenantSettingsDto {
@@ -87,7 +86,6 @@ export interface TenantSettingsDto {
   webhookMaxAttempts: number | null;
   webhookTimeoutSeconds: number | null;
   think: boolean | null;
-  ocrEnabled: boolean | null;
   effective: ResolvedTenantSettings;
 }
 

@@ -40,8 +40,7 @@ public class TenantSettingsService(
             OllamaTimeoutSeconds: row.OllamaTimeoutSeconds ?? o.TimeoutSeconds,
             WebhookMaxAttempts: row.WebhookMaxAttempts ?? p.WebhookMaxAttempts,
             WebhookTimeoutSeconds: row.WebhookTimeoutSeconds ?? 15,
-            Think: row.Think,
-            OcrEnabled: row.OcrEnabled ?? true
+            Think: row.Think
         );
 
         cache.Set(Key(tenantId), resolved, CacheTtl);

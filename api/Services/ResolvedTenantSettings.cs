@@ -7,6 +7,5 @@ public record ResolvedTenantSettings(
     int OllamaTimeoutSeconds,
     int WebhookMaxAttempts,
     int WebhookTimeoutSeconds,
-    bool? Think,
-    bool OcrEnabled
+    bool? Think
 );
