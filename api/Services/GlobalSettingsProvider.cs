@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ScribAi.Api.Data;
 using ScribAi.Api.Data.Entities;
+using ScribAi.Api.Options;
 using ScribAi.Api.Security;
 
 namespace ScribAi.Api.Services;
@@ -12,7 +14,8 @@ public record ResolvedGlobalSettings(
     string SeqMinimumLevel,
     string ApplicationName,
     string[] AllowedOrigins,
-    bool AllowAnyOrigin
+    bool AllowAnyOrigin,
+    string OllamaBaseUrl
 );
 
 public interface IGlobalSettingsProvider
@@ -27,9 +30,11 @@ public interface IGlobalSettingsProvider
 public class GlobalSettingsProvider(
     IDbContextFactory<ScribaiDbContext> dbFactory,
     ISecretsProtector secrets,
+    IOptions<OllamaOptions> ollamaOpt,
     ILogger<GlobalSettingsProvider> log) : IGlobalSettingsProvider
 {
-    private ResolvedGlobalSettings _current = new(false, null, null, "Information", "ScribAi", [], false);
+    private readonly string _defaultOllamaUrl = ollamaOpt.Value.BaseUrl;
+    private ResolvedGlobalSettings _current = new(false, null, null, "Information", "ScribAi", [], false, ollamaOpt.Value.BaseUrl);
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public ResolvedGlobalSettings Current => _current;
@@ -67,7 +72,8 @@ public class GlobalSettingsProvider(
                 SeqMinimumLevel: row.SeqMinimumLevel,
                 ApplicationName: string.IsNullOrWhiteSpace(row.ApplicationName) ? "ScribAi" : row.ApplicationName,
                 AllowedOrigins: row.AllowedOrigins ?? [],
-                AllowAnyOrigin: row.AllowAnyOrigin);
+                AllowAnyOrigin: row.AllowAnyOrigin,
+                OllamaBaseUrl: string.IsNullOrWhiteSpace(row.OllamaBaseUrl) ? _defaultOllamaUrl : row.OllamaBaseUrl!);
 
             log.LogInformation("Global settings reloaded: seq_enabled={Enabled} url={Url}", _current.SeqEnabled, _current.SeqUrl);
             Changed?.Invoke(_current);

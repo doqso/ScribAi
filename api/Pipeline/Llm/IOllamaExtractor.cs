@@ -18,5 +18,6 @@ public interface IOllamaExtractor
         IReadOnlyList<byte[]>? images = null,
         TimeSpan? perRequestTimeout = null,
         bool? think = null,
+        int? numCtx = null,
         CancellationToken ct = default);
 }

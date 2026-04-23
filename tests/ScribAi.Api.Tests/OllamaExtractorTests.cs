@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using ScribAi.Api.Data.Entities;
 using ScribAi.Api.Options;
 using ScribAi.Api.Pipeline.Llm;
+using ScribAi.Api.Services;
 using System.Net;
 using System.Text;
 
@@ -19,10 +21,20 @@ public class OllamaExtractorTests
         }
     }
 
+    private class StubGlobalsProvider(string url) : IGlobalSettingsProvider
+    {
+        public ResolvedGlobalSettings Current { get; } = new(false, null, null, "Information", "ScribAi", [], false, url);
+        public event Action<ResolvedGlobalSettings>? Changed { add { } remove { } }
+        public Task ReloadAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task<GlobalSettings> GetRawAsync(CancellationToken ct = default) => Task.FromResult(new GlobalSettings());
+        public Task UpdateAsync(Action<GlobalSettings> mutate, Guid? updatedBy, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
     private static OllamaExtractor Build(StubHandler handler) =>
         new(
             new HttpClient(handler) { BaseAddress = new Uri("http://ollama:11434") },
             Microsoft.Extensions.Options.Options.Create(new OllamaOptions { DefaultModel = "qwen2.5:7b-instruct", Temperature = 0 }),
+            new StubGlobalsProvider("http://ollama:11434"),
             NullLogger<OllamaExtractor>.Instance);
 
     private const string Schema = """

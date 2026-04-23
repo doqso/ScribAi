@@ -1,15 +1,24 @@
 using Microsoft.Extensions.Options;
 using NJsonSchema;
 using ScribAi.Api.Options;
+using ScribAi.Api.Services;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace ScribAi.Api.Pipeline.Llm;
 
-public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogger<OllamaExtractor> log) : IOllamaExtractor
+public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, IGlobalSettingsProvider globals, ILogger<OllamaExtractor> log) : IOllamaExtractor
 {
     private readonly OllamaOptions _opt = opt.Value;
+
+    private Uri BuildChatUri()
+    {
+        var baseUrl = globals.Current.OllamaBaseUrl;
+        if (string.IsNullOrWhiteSpace(baseUrl) || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri))
+            baseUri = http.BaseAddress ?? new Uri(_opt.BaseUrl);
+        return new Uri(baseUri, "/api/chat");
+    }
 
     private const string SystemPrompt =
         "You are a strict document data extractor. Given a document's text content and a JSON Schema, " +
@@ -23,6 +32,7 @@ public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogg
         IReadOnlyList<byte[]>? images = null,
         TimeSpan? perRequestTimeout = null,
         bool? think = null,
+        int? numCtx = null,
         CancellationToken ct = default)
     {
         model = string.IsNullOrWhiteSpace(model) ? _opt.DefaultModel : model;
@@ -46,15 +56,17 @@ public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogg
             attempt++;
             var userContent = BuildUser(text, jsonSchema, lastError);
 
+            var options = new JsonObject
+            {
+                ["temperature"] = _opt.Temperature
+            };
+            if (numCtx is int nc) options["num_ctx"] = nc;
             var payload = new JsonObject
             {
                 ["model"] = model,
                 ["stream"] = false,
                 ["format"] = schemaNode.DeepClone(),
-                ["options"] = new JsonObject
-                {
-                    ["temperature"] = _opt.Temperature
-                },
+                ["options"] = options,
                 ["messages"] = new JsonArray
                 {
                     new JsonObject { ["role"] = "system", ["content"] = SystemPrompt },
@@ -63,7 +75,7 @@ public class OllamaExtractor(HttpClient http, IOptions<OllamaOptions> opt, ILogg
             };
             if (think is bool t2) payload["think"] = t2;
 
-            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/chat")
+            using var req = new HttpRequestMessage(HttpMethod.Post, BuildChatUri())
             {
                 Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
             };

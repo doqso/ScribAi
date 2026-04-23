@@ -85,7 +85,7 @@ export class ApiService {
   }
 
   getGlobal() { return this.http.get<GlobalSettingsDto>(`${this.base}/v1/admin/global/`); }
-  putGlobal(body: { seqEnabled: boolean; seqUrl: string | null; seqApiKey: string | null; clearSeqApiKey: boolean; seqMinimumLevel: string; applicationName: string; allowedOrigins?: string[]; allowAnyOrigin?: boolean }) {
+  putGlobal(body: { seqEnabled: boolean; seqUrl: string | null; seqApiKey: string | null; clearSeqApiKey: boolean; seqMinimumLevel: string; applicationName: string; allowedOrigins?: string[]; allowAnyOrigin?: boolean; ollamaBaseUrl?: string | null; clearOllamaBaseUrl?: boolean }) {
     return this.http.put<GlobalSettingsDto>(`${this.base}/v1/admin/global/`, body);
   }
   testSeq() { return this.http.post<SeqTestResult>(`${this.base}/v1/admin/global/seq/test`, {}); }

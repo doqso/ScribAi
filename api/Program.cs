@@ -49,17 +49,13 @@ builder.Services.AddSingleton<IGlobalSettingsProvider, GlobalSettingsProvider>()
 builder.Services.AddSingleton<ITenantSettingsService, TenantSettingsService>();
 builder.Services.AddSingleton<IAuditLogger, AuditLogger>();
 
-builder.Services.AddHttpClient<IOllamaExtractor, OllamaExtractor>((sp, c) =>
+builder.Services.AddHttpClient<IOllamaExtractor, OllamaExtractor>(c =>
 {
-    var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>().Value;
-    c.BaseAddress = new Uri(opt.BaseUrl);
     c.Timeout = TimeSpan.FromMinutes(30);
 });
 
-builder.Services.AddHttpClient("ollama-meta", (sp, c) =>
+builder.Services.AddHttpClient("ollama-meta", c =>
 {
-    var opt = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>().Value;
-    c.BaseAddress = new Uri(opt.BaseUrl);
     c.Timeout = TimeSpan.FromSeconds(15);
 });
 

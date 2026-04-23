@@ -68,6 +68,11 @@ import { GlobalSettingsDto, OllamaModelInfo, TenantSettingsDto } from '../../cor
             </select>
           </label>
 
+          <label>
+            Tamaño de contexto (num_ctx)
+            <input type="number" [(ngModel)]="numCtx" name="nc" placeholder="default del modelo (Modelfile)" min="256" max="1048576" />
+          </label>
+
         </div>
         <div class="actions">
           <button (click)="saveTenant()" [disabled]="saving()">Guardar cambios</button>
@@ -76,6 +81,23 @@ import { GlobalSettingsDto, OllamaModelInfo, TenantSettingsDto } from '../../cor
         @if (testMsg()) { <div class="msg">{{ testMsg() }}</div> }
       }
       @else { <p>Cargando...</p> }
+    </section>
+
+    <section class="card">
+      <h2>Global — Ollama</h2>
+      @if (globalCfg(); as g) {
+        <div class="grid">
+          <label>
+            URL base Ollama
+            <input [(ngModel)]="ollamaUrl" name="ou" [placeholder]="'default: ' + g.effectiveOllamaBaseUrl" />
+          </label>
+          <div>Efectiva: <code>{{ g.effectiveOllamaBaseUrl }}</code></div>
+        </div>
+        <div class="actions">
+          <button (click)="saveGlobal()" [disabled]="saving()">Guardar</button>
+          @if (ollamaMsg()) { <span class="msg">{{ ollamaMsg() }}</span> }
+        </div>
+      }
     </section>
 
     <section class="card">
@@ -184,6 +206,7 @@ export class SettingsComponent implements OnInit {
   webhookAttempts = signal<number | null>(null);
   webhookTimeout = signal<number | null>(null);
   think = signal<'' | 'on' | 'off'>('');
+  numCtx = signal<number | null>(null);
 
   seqEnabled = signal(false);
   seqUrl = signal('');
@@ -195,6 +218,8 @@ export class SettingsComponent implements OnInit {
   changingKey = signal(false);
   clearKey = signal(false);
   corsMsg = signal<string | null>(null);
+  ollamaUrl = signal('');
+  ollamaMsg = signal<string | null>(null);
 
   saving = signal(false);
   testing = signal(false);
@@ -215,6 +240,7 @@ export class SettingsComponent implements OnInit {
       this.webhookAttempts.set(s.webhookMaxAttempts);
       this.webhookTimeout.set(s.webhookTimeoutSeconds);
       this.think.set(s.think === true ? 'on' : s.think === false ? 'off' : '');
+      this.numCtx.set(s.numCtx);
     });
     this.api.listModels().subscribe({
       next: m => this.models.set(m),
@@ -228,6 +254,7 @@ export class SettingsComponent implements OnInit {
       this.appName.set(g.applicationName ?? 'ScribAi');
       this.allowAny.set(g.allowAnyOrigin);
       this.originsText.set((g.allowedOrigins ?? []).join('\n'));
+      this.ollamaUrl.set(g.ollamaBaseUrl ?? '');
     });
   }
 
@@ -255,6 +282,8 @@ export class SettingsComponent implements OnInit {
       clearWebhookTimeoutSeconds: this.webhookTimeout() === null,
       think: th === 'on' ? true : th === 'off' ? false : null,
       clearThink: th === '',
+      numCtx: this.numCtx(),
+      clearNumCtx: this.numCtx() === null,
     };
     this.api.putSettings(body).subscribe({
       next: s => { this.settings.set(s); this.tenantMsg.set('Guardado'); this.saving.set(false); },
@@ -266,6 +295,7 @@ export class SettingsComponent implements OnInit {
     this.saving.set(true);
     this.globalMsg.set(null);
     const origins = this.originsText().split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    const ou = this.ollamaUrl().trim();
     this.api.putGlobal({
       seqEnabled: this.seqEnabled(),
       seqUrl: this.seqUrl() || null,
@@ -274,17 +304,26 @@ export class SettingsComponent implements OnInit {
       seqMinimumLevel: this.seqLevel(),
       applicationName: this.appName() || 'ScribAi',
       allowedOrigins: origins,
-      allowAnyOrigin: this.allowAny()
+      allowAnyOrigin: this.allowAny(),
+      ollamaBaseUrl: ou || null,
+      clearOllamaBaseUrl: ou.length === 0
     }).subscribe({
       next: g => {
         this.globalCfg.set(g);
         this.globalMsg.set('Guardado');
+        this.ollamaMsg.set('Guardado');
         this.saving.set(false);
         this.changingKey.set(false);
         this.clearKey.set(false);
         this.seqKey.set('');
+        this.ollamaUrl.set(g.ollamaBaseUrl ?? '');
       },
-      error: e => { this.globalMsg.set('Error: ' + (e.error?.error ?? e.message)); this.saving.set(false); }
+      error: e => {
+        const msg = 'Error: ' + (e.error?.error ?? e.message);
+        this.globalMsg.set(msg);
+        this.ollamaMsg.set(msg);
+        this.saving.set(false);
+      }
     });
   }
 

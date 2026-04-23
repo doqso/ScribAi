@@ -77,6 +77,7 @@ export interface ResolvedTenantSettings {
   webhookMaxAttempts: number;
   webhookTimeoutSeconds: number;
   think: boolean | null;
+  numCtx: number | null;
 }
 
 export interface TenantSettingsDto {
@@ -86,6 +87,7 @@ export interface TenantSettingsDto {
   webhookMaxAttempts: number | null;
   webhookTimeoutSeconds: number | null;
   think: boolean | null;
+  numCtx: number | null;
   effective: ResolvedTenantSettings;
 }
 
@@ -109,6 +111,8 @@ export interface GlobalSettingsDto {
   applicationName: string;
   allowedOrigins: string[];
   allowAnyOrigin: boolean;
+  ollamaBaseUrl: string | null;
+  effectiveOllamaBaseUrl: string;
   updatedAt: string;
 }
 

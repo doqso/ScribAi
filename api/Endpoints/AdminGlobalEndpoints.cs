@@ -15,6 +15,8 @@ public static class AdminGlobalEndpoints
         string ApplicationName,
         string[] AllowedOrigins,
         bool AllowAnyOrigin,
+        string? OllamaBaseUrl,
+        string EffectiveOllamaBaseUrl,
         DateTimeOffset UpdatedAt
     );
 
@@ -26,7 +28,9 @@ public static class AdminGlobalEndpoints
         string SeqMinimumLevel,
         string? ApplicationName,
         string[]? AllowedOrigins,
-        bool? AllowAnyOrigin
+        bool? AllowAnyOrigin,
+        string? OllamaBaseUrl,
+        bool ClearOllamaBaseUrl = false
     );
 
     public record SeqTestResult(bool Ok, string? Error);
@@ -43,7 +47,9 @@ public static class AdminGlobalEndpoints
             return Results.Ok(new GlobalDto(
                 row.SeqEnabled, row.SeqUrl, row.SeqApiKeyEncrypted is { Length: > 0 },
                 row.SeqMinimumLevel, row.ApplicationName,
-                row.AllowedOrigins ?? [], row.AllowAnyOrigin, row.UpdatedAt));
+                row.AllowedOrigins ?? [], row.AllowAnyOrigin,
+                row.OllamaBaseUrl, provider.Current.OllamaBaseUrl,
+                row.UpdatedAt));
         });
 
         g.MapPut("/", async (GlobalUpdateRequest req, HttpContext ctx, IGlobalSettingsProvider provider, ISecretsProtector secrets, IAuditLogger audit, CancellationToken ct) =>
@@ -56,6 +62,10 @@ public static class AdminGlobalEndpoints
 
             if (!string.IsNullOrWhiteSpace(req.SeqUrl) && !Uri.TryCreate(req.SeqUrl, UriKind.Absolute, out _))
                 return Results.BadRequest(new { error = "invalid_seq_url" });
+
+            if (!req.ClearOllamaBaseUrl && !string.IsNullOrWhiteSpace(req.OllamaBaseUrl) &&
+                !Uri.TryCreate(req.OllamaBaseUrl, UriKind.Absolute, out _))
+                return Results.BadRequest(new { error = "invalid_ollama_base_url" });
 
             var levels = new[] { "Verbose", "Debug", "Information", "Warning", "Error", "Fatal" };
             var level = levels.FirstOrDefault(l => l.Equals(req.SeqMinimumLevel, StringComparison.OrdinalIgnoreCase))
@@ -79,16 +89,22 @@ public static class AdminGlobalEndpoints
                 if (req.ClearSeqApiKey) row.SeqApiKeyEncrypted = null;
                 else if (!string.IsNullOrWhiteSpace(req.SeqApiKey))
                     row.SeqApiKeyEncrypted = secrets.Encrypt(req.SeqApiKey);
+
+                if (req.ClearOllamaBaseUrl) row.OllamaBaseUrl = null;
+                else if (!string.IsNullOrWhiteSpace(req.OllamaBaseUrl))
+                    row.OllamaBaseUrl = req.OllamaBaseUrl.Trim().TrimEnd('/');
             }, t.ApiKeyId, ct);
 
             var fresh = await provider.GetRawAsync(ct);
             await audit.LogAsync(ctx, "global_settings.updated", target: "global",
-                details: new { req.SeqEnabled, req.SeqUrl, req.ClearSeqApiKey, req.SeqMinimumLevel, req.ApplicationName, req.AllowedOrigins, req.AllowAnyOrigin, keyChanged = !string.IsNullOrWhiteSpace(req.SeqApiKey) },
+                details: new { req.SeqEnabled, req.SeqUrl, req.ClearSeqApiKey, req.SeqMinimumLevel, req.ApplicationName, req.AllowedOrigins, req.AllowAnyOrigin, req.OllamaBaseUrl, req.ClearOllamaBaseUrl, keyChanged = !string.IsNullOrWhiteSpace(req.SeqApiKey) },
                 ct: ct);
             return Results.Ok(new GlobalDto(
                 fresh.SeqEnabled, fresh.SeqUrl, fresh.SeqApiKeyEncrypted is { Length: > 0 },
                 fresh.SeqMinimumLevel, fresh.ApplicationName,
-                fresh.AllowedOrigins ?? [], fresh.AllowAnyOrigin, fresh.UpdatedAt));
+                fresh.AllowedOrigins ?? [], fresh.AllowAnyOrigin,
+                fresh.OllamaBaseUrl, provider.Current.OllamaBaseUrl,
+                fresh.UpdatedAt));
         });
 
         g.MapPost("/seq/test", (HttpContext ctx, IGlobalSettingsProvider provider) =>

@@ -72,7 +72,7 @@ public class ExtractionService(
             {
                 log.LogInformation("Calling LLM (vision). model={Model} pages={Pages}", settings.VisionModel, doc.PageImages.Count);
                 progress?.Report(new ProgressEvent("calling_llm", $"vision:{settings.VisionModel} pages={doc.PageImages.Count}"));
-                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, settings.VisionModel, doc.PageImages, llmTimeout, settings.Think, ct);
+                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, settings.VisionModel, doc.PageImages, llmTimeout, settings.Think, settings.NumCtx, ct);
                 extraction.ExtractionMethod = ExtractionMethod.Vision.ToString();
                 extraction.Model = settings.VisionModel;
             }
@@ -80,7 +80,7 @@ public class ExtractionService(
             {
                 log.LogInformation("Calling LLM (text). model={Model}", effectiveModel);
                 progress?.Report(new ProgressEvent("calling_llm", $"text:{effectiveModel}"));
-                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, effectiveModel, null, llmTimeout, settings.Think, ct);
+                result = await llm.ExtractAsync(doc.Text, extraction.JsonSchemaSnapshot, effectiveModel, null, llmTimeout, settings.Think, settings.NumCtx, ct);
             }
 
             log.LogInformation("LLM done. validated={Valid} tokens_in={In} tokens_out={Out} duration_ms={Ms}",

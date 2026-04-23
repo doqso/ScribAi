@@ -16,6 +16,7 @@ public static class SettingsEndpoints
         int? WebhookMaxAttempts,
         int? WebhookTimeoutSeconds,
         bool? Think,
+        int? NumCtx,
         ResolvedTenantSettings Effective
     );
 
@@ -26,12 +27,14 @@ public static class SettingsEndpoints
         int? WebhookMaxAttempts,
         int? WebhookTimeoutSeconds,
         bool? Think,
+        int? NumCtx,
         bool ClearDefaultTextModel = false,
         bool ClearVisionModel = false,
         bool ClearOllamaTimeoutSeconds = false,
         bool ClearWebhookMaxAttempts = false,
         bool ClearWebhookTimeoutSeconds = false,
-        bool ClearThink = false
+        bool ClearThink = false,
+        bool ClearNumCtx = false
     );
 
     public record ModelInfo(string Name, long? Size);
@@ -50,7 +53,7 @@ public static class SettingsEndpoints
             var eff = await svc.GetAsync(t.TenantId, ct);
             return Results.Ok(new SettingsDto(
                 raw.DefaultTextModel, raw.VisionModel, raw.OllamaTimeoutSeconds,
-                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, eff));
+                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, raw.NumCtx, eff));
         });
 
         g.MapPut("/", async (SettingsUpdateRequest req, HttpContext ctx, ITenantSettingsService svc, IAuditLogger audit, CancellationToken ct) =>
@@ -77,6 +80,9 @@ public static class SettingsEndpoints
 
                 if (req.ClearThink) s.Think = null;
                 else if (req.Think is bool th) s.Think = th;
+
+                if (req.ClearNumCtx) s.NumCtx = null;
+                else if (req.NumCtx is int nc) s.NumCtx = Math.Clamp(nc, 256, 1048576);
             }, ct);
 
             var raw = await svc.GetRawAsync(t.TenantId, ct);
@@ -84,17 +90,18 @@ public static class SettingsEndpoints
             await audit.LogAsync(ctx, "tenant_settings.updated", target: t.TenantId.ToString(), details: req, ct: ct);
             return Results.Ok(new SettingsDto(
                 raw.DefaultTextModel, raw.VisionModel, raw.OllamaTimeoutSeconds,
-                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, eff));
+                raw.WebhookMaxAttempts, raw.WebhookTimeoutSeconds, raw.Think, raw.NumCtx, eff));
         });
 
-        g.MapGet("/models", async (HttpContext ctx, IHttpClientFactory http, CancellationToken ct) =>
+        g.MapGet("/models", async (HttpContext ctx, IHttpClientFactory http, IGlobalSettingsProvider globals, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             if (!t.IsAdmin) return Results.Forbid();
             try
             {
                 using var client = http.CreateClient("ollama-meta");
-                var json = await client.GetStringAsync("/api/tags", ct);
+                var baseUri = new Uri(globals.Current.OllamaBaseUrl);
+                var json = await client.GetStringAsync(new Uri(baseUri, "/api/tags"), ct);
                 using var doc = JsonDocument.Parse(json);
                 var list = new List<ModelInfo>();
                 if (doc.RootElement.TryGetProperty("models", out var arr))
@@ -114,25 +121,30 @@ public static class SettingsEndpoints
             }
         });
 
-        g.MapPost("/models/test", async (TestModelRequest req, HttpContext ctx, IHttpClientFactory http, CancellationToken ct) =>
+        g.MapPost("/models/test", async (TestModelRequest req, HttpContext ctx, IHttpClientFactory http, IGlobalSettingsProvider globals, ITenantSettingsService svc, CancellationToken ct) =>
         {
             var t = ctx.Tenant();
             if (!t.IsAdmin) return Results.Forbid();
             if (string.IsNullOrWhiteSpace(req.Model)) return Results.BadRequest(new { error = "model_required" });
 
+            var settings = await svc.GetAsync(t.TenantId, ct);
             var sw = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 using var client = http.CreateClient("ollama-meta");
                 client.Timeout = TimeSpan.FromSeconds(60);
+                var baseUri = new Uri(globals.Current.OllamaBaseUrl);
+                var options = new JsonObject { ["temperature"] = 0 };
+                if (settings.NumCtx is int nc) options["num_ctx"] = nc;
                 var payload = new JsonObject
                 {
                     ["model"] = req.Model,
                     ["prompt"] = "Reply with exactly the word: OK",
                     ["stream"] = false,
-                    ["options"] = new JsonObject { ["temperature"] = 0 }
+                    ["options"] = options
                 };
-                using var httpReq = new HttpRequestMessage(HttpMethod.Post, "/api/generate")
+                if (settings.Think is bool think) payload["think"] = think;
+                using var httpReq = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/generate"))
                 {
                     Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json")
                 };
